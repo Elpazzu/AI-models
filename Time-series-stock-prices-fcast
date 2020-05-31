@@ -82,20 +82,6 @@ plt.title('ABN AMRO Bank stock price evolution (Two Side View)', fontsize=8)
 plt.hlines(y=0, xmin=np.min(Main.Date), xmax=np.max(Main.Date), linewidth=.5)
 plt.show()
 
-decomposition = seasonal_decompose(y1, freq=40)
-trend = decomposition.trend
-seasonal = decomposition.seasonal
-residual = decomposition.resid
-
-pd.DataFrame(y1).plot()
-plt.legend(['Trend and Seasonality'])
-pd.DataFrame(trend).plot()
-plt.legend(['Trend only'])
-pd.DataFrame(seasonal).plot()
-plt.legend(['Seasonality only'])
-pd.DataFrame(residual).plot()
-plt.legend(['Residuals'])
-
 result_mul = seasonal_decompose(Main['Last'], model='multiplicative', freq=30)
 result_add = seasonal_decompose(Main['Last'], model='additive', freq=30)
 
