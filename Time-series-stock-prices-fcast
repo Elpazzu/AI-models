@@ -1,0 +1,289 @@
+from dateutil.parser import parse 
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+import pandas as pd
+from statsmodels.tsa.seasonal import seasonal_decompose
+from statsmodels.tsa.stattools import adfuller, kpss
+from scipy import signal
+from pandas.plotting import autocorrelation_plot
+from statsmodels.tsa.stattools import acf, pacf
+from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
+from pandas.plotting import lag_plot
+from statsmodels.nonparametric.smoothers_lowess import lowess
+from statsmodels.tsa.arima_model import ARIMA
+import pmdarima as pm
+from statsmodels.tsa.statespace.sarimax import SARIMAXResults
+import statsmodels.api as sm
+
+where = urllib.parse.quote_plus("""
+{
+    "title": {
+        "$gt": "Zombieland: Double Tap"
+    }
+}
+""")
+url = 'https://parseapi.back4app.com/classes/Moviesdatabase_Movie?limit=100000&order=title&excludeKeys=year&where=%s' % where
+headers = {
+    'X-Parse-Application-Id': 'uuUjR3UJyMVD4dlCq9CC5wPQJM689mjeRm3dSRM9', # This is your app's application id
+    'X-Parse-REST-API-Key': 'J1wXpL4VItJD8qsuhiyjtCvF0ok4lRHR35G0bvKk' # This is your app's REST API key
+}
+data = json.loads(requests.get(url, headers=headers).content.decode('utf-8')) # Here you have the data that you need
+
+where = urllib.parse.quote_plus("""
+{
+    "name": {
+        "$exists": true
+    }
+}
+""")
+url = 'https://parseapi.back4app.com/classes/Moviesdatabase_Star?limit=100000&order=name&where=%s' % where
+headers = {
+    'X-Parse-Application-Id': 'uuUjR3UJyMVD4dlCq9CC5wPQJM689mjeRm3dSRM9', # This is your app's application id
+    'X-Parse-REST-API-Key': 'J1wXpL4VItJD8qsuhiyjtCvF0ok4lRHR35G0bvKk' # This is your app's REST API key
+}
+data = json.loads(requests.get(url, headers=headers).content.decode('utf-8')) # Here you have the data that you need
+
+with open('data.json', 'w') as json_file:
+    json.dump(data, json_file)
+
+print(json.dumps(data, indent=2))
+print(json.dumps(data2, indent=2))
+
+data_parsed = json.loads(data)
+emp_data = employee_parsed['employee_details']
+employ_data = open('/tmp/EmployData.csv', 'w')
+csvwriter = csv.writer(employ_data)
+count = 0
+for emp in emp_data:
+      if count == 0:
+             header = emp.keys()
+             csvwriter.writerow(header)
+             count += 1
+      csvwriter.writerow(emp.values())
+employ_data.close()
+
+plt.rcParams.update({'figure.figsize': (7, 4), 'figure.dpi': 80})
+
+Main = pd.read_csv('StockPrices.csv', parse_dates=['Date'], index_col='Date')
+Main = Main.loc[Main['Equity'] == 'We. Connect SA']
+Main = Main.drop(['Open', 'High', 'Low', 'Volume', 'Turnover', 'Equity'], axis=1)
+
+plt.plot(Main['Last'])
+plt.legend(['Daily closing stock price'])
+sns.set_style("white")
+x = Main.index
+y1 = Main['Last'].values
+fig, ax = plt.subplots(1, 1, figsize=(8,6), dpi= 120)
+plt.fill_between(x, y1=y1, y2=-y1, alpha=0.5, linewidth=2, color='seagreen')
+plt.ylim(-50, 50)
+plt.title('ABN AMRO Bank stock price evolution (Two Side View)', fontsize=8)
+plt.hlines(y=0, xmin=np.min(Main.Date), xmax=np.max(Main.Date), linewidth=.5)
+plt.show()
+
+decomposition = seasonal_decompose(y1, freq=40)
+trend = decomposition.trend
+seasonal = decomposition.seasonal
+residual = decomposition.resid
+
+pd.DataFrame(y1).plot()
+plt.legend(['Trend and Seasonality'])
+pd.DataFrame(trend).plot()
+plt.legend(['Trend only'])
+pd.DataFrame(seasonal).plot()
+plt.legend(['Seasonality only'])
+pd.DataFrame(residual).plot()
+plt.legend(['Residuals'])
+
+result_mul = seasonal_decompose(Main['Last'], model='multiplicative', freq=30)
+result_add = seasonal_decompose(Main['Last'], model='additive', freq=30)
+
+plt.rcParams.update({'figure.figsize': (7,7)})
+result_mul.plot().suptitle('Multiplicative Decompose', fontsize=10)
+result_add.plot().suptitle('Additive Decompose', fontsize=10)
+plt.show()
+
+Main_reconstructed = pd.concat([result_mul.seasonal, result_mul.trend, result_mul.resid, result_mul.observed], axis=1)
+Main_reconstructed.columns = ['seas', 'trend', 'resid', 'actual_values']
+Main_reconstructed.fillna(Main['Last'], inplace=True)
+print(Main_reconstructed.head(-5))
+
+result = adfuller(Main.Last.values, autolag='AIC')
+print(f'ADF Statistic: {result[0]}')
+print(f'p-value: {result[1]}')
+for key, value in result[4].items():
+    print('Critial Values:')
+    print(f'   {key}, {value}')
+
+detrended = signal.detrend(Main.Last.values)
+plt.plot(detrended)
+plt.title('ABN AMRO stock price detrended by subtracting the least squares fit', fontsize=10)
+detrended2 = Main.Last.values - Main_reconstructed.trend.values
+plt.plot(detrended2)
+plt.title('ABN AMRO stock price detrended by subtracting the least squares fit', fontsize=10)
+plt.legend(['original across x-axis', 'detrended'])
+
+deseasonalized = Main.Last.values / result_mul.seasonal
+plt.plot(deseasonalized)
+plt.title('ABN AMRO stock price deseasonalized', fontsize=10)
+plt.plot()
+
+plt.rcParams.update({'figure.figsize':(9,5), 'figure.dpi':120})
+autocorrelation_plot(Main.Last.tolist())
+
+fig, axes = plt.subplots(1,2,figsize=(12,5), dpi= 100)
+plot_acf(Main.Last.tolist(), lags=50, ax=axes[0])
+plot_pacf(Main.Last.tolist(), lags=50, ax=axes[1])
+
+plt.rcParams.update({'ytick.left' : False, 'axes.titlepad':10})
+fig, axes = plt.subplots(1, 4, figsize=(10,3), sharex=True, sharey=True, dpi=100)
+for i, ax in enumerate(axes.flatten()[:4]):
+    lag_plot(Main.Last, lag=i+1, ax=ax, c='firebrick')
+    ax.set_title('Lag ' + str(i+1))
+fig.suptitle('Lag Plots of ABN AMRO stock price show a clear pattern -> autocorrelation verified', y=1.15)
+
+rand_small = np.random.randint(0, 100, size=36)
+rand_big = np.random.randint(0, 100, size=136)
+def ApEn(U, m, r):
+    def _maxdist(x_i, x_j):
+        return max([abs(ua - va) for ua, va in zip(x_i, x_j)])
+    def _phi(m):
+        x = [[U[j] for j in range(i, i + m - 1 + 1)] for i in range(N - m + 1)]
+        C = [len([1 for x_j in x if _maxdist(x_i, x_j) <= r]) / (N - m + 1.0) for x_i in x]
+        return (N - m + 1.0)**(-1) * sum(np.log(C))
+    N = len(U)
+    return abs(_phi(m+1) - _phi(m))
+print(ApEn(Main.Last, m=2, r=0.2*np.std(Main.Last)))
+print(ApEn(rand_small, m=2, r=0.2*np.std(rand_small))) 
+print(ApEn(rand_big, m=2, r=0.2*np.std(rand_big)))     
+
+def SampEn(U, m, r):
+    def _maxdist(x_i, x_j):
+        return max([abs(ua - va) for ua, va in zip(x_i, x_j)])
+    def _phi(m):
+        x = [[U[j] for j in range(i, i + m - 1 + 1)] for i in range(N - m + 1)]
+        C = [len([1 for j in range(len(x)) if i != j and _maxdist(x[i], x[j]) <= r]) for i in range(len(x))]
+        return sum(C)
+    N = len(U)
+    return -np.log(_phi(m+1) / _phi(m))
+print(SampEn(Main.Last, m=2, r=0.2*np.std(Main.Last)))   
+print(SampEn(rand_small, m=2, r=0.2*np.std(rand_small))) 
+print(SampEn(rand_big, m=2, r=0.2*np.std(rand_big)))     
+
+plt.rcParams.update({'xtick.bottom' : False, 'axes.titlepad':5})
+df_ma = Main.Last.rolling(60, center=True, closed='both').mean()
+df_loess_5 = pd.DataFrame(lowess(Main.Last, np.arange(len(Main.Last)), frac=0.05)[:, 1], index=Main.index, columns=['Last'])
+df_loess_15 = pd.DataFrame(lowess(Main.Last, np.arange(len(Main.Last)), frac=0.15)[:, 1], index=Main.index, columns=['Last'])
+
+fig, axes = plt.subplots(4,1, figsize=(7, 7), sharex=True, dpi=120)
+Main['Last'].plot(ax=axes[0], color='k', title='Original Series')
+df_loess_5['Last'].plot(ax=axes[1], title='Loess Smoothed 5%')
+df_loess_15['Last'].plot(ax=axes[2], title='Loess Smoothed 15%')
+df_ma.plot(ax=axes[3], title='Moving Average (60)')
+fig.suptitle('Time Series Smoothening', y=0.95, fontsize=14)
+plt.show()
+
+plt.rcParams.update({'figure.figsize':(9,7), 'figure.dpi':90})
+fig, axes = plt.subplots(3, 2, sharex=True)
+axes[0, 0].plot(Main.Last); axes[0, 0].set_title('Original Series')
+plot_acf(Main.Last, ax=axes[0, 1])
+axes[1, 0].plot(Main.Last.diff()); axes[1, 0].set_title('1st Order Differencing')
+plot_acf(Main.Last.diff().dropna(), ax=axes[1, 1])
+axes[2, 0].plot(Main.Last.diff().diff()); axes[2, 0].set_title('2nd Order Differencing')
+plot_acf(Main.Last.diff().diff().dropna(), ax=axes[2, 1])
+plt.show()
+
+fig, axes = plt.subplots(1, 2, sharex=True)
+axes[0].plot(Main.Last.diff()); axes[0].set_title('1st Differencing')
+axes[1].set(ylim=(0,5))
+plot_pacf(Main.Last.diff().diff().dropna(), ax=axes[1])
+plt.show()
+
+fig, axes = plt.subplots(1, 2, sharex=True)
+axes[0].plot(Main.Last.diff()); axes[0].set_title('1st Differencing')
+axes[1].set(ylim=(0,1.2))
+plot_acf(Main.Last.diff().dropna(), ax=axes[1])
+plt.show()
+
+model = ARIMA(Main.Last, order=(1,1,1))
+model_fit = model.fit(disp=0)
+print(model_fit.summary())
+
+residuals = pd.DataFrame(model_fit.resid)
+fig, ax = plt.subplots(1,2)
+residuals.plot(title="Residuals", ax=ax[0])
+residuals.plot(kind='kde', title='Density', ax=ax[1])
+plt.show()
+
+model_fit.plot_predict(dynamic=False)
+plt.show()
+
+train = Main.Last[:900]
+test = Main.Last[900:]
+model = ARIMA(train, order=(1, 2, 2))  
+fitted = model.fit(disp=-1)  
+fc, se, conf = fitted.forecast(242, alpha=0.05)
+fc_series = pd.Series(fc, index=test.index)
+lower_series = pd.Series(conf[:, 0], index=test.index)
+upper_series = pd.Series(conf[:, 1], index=test.index)
+
+plt.figure(figsize=(9,5), dpi=100)
+plt.plot(train, label='training')
+plt.plot(test, label='actual')
+plt.plot(fc_series, label='forecast')
+plt.fill_between(lower_series.index, lower_series, upper_series, 
+                 color='k', alpha=.15)
+plt.title('Forecast vs Actuals')
+plt.legend(loc='upper left', fontsize=7)
+plt.show()
+
+def forecast_accuracy(forecast, actual):
+    mape = np.mean(np.abs(forecast - actual)/np.abs(actual))  
+    me = np.mean(forecast - actual)             
+    mae = np.mean(np.abs(forecast - actual))    
+    mpe = np.mean((forecast - actual)/actual)   
+    rmse = np.mean((forecast - actual)**2)**.5  
+    corr = np.corrcoef(forecast, actual)[0,1]   
+    mins = np.amin(np.hstack([forecast[:,None], 
+                              actual[:,None]]), axis=1)
+    maxs = np.amax(np.hstack([forecast[:,None], 
+                              actual[:,None]]), axis=1)
+    minmax = 1 - np.mean(mins/maxs)
+    acf1 = acf(fc-test)[1]
+    return({'mape':mape, 'me':me, 'mae': mae, 
+            'mpe': mpe, 'rmse':rmse, 'acf1':acf1, 
+            'corr':corr, 'minmax':minmax})
+print(forecast_accuracy(fc, test.values))
+
+model = pm.auto_arima(Main.Last, start_p=1, start_q=1,
+                      test='adf',       
+                      max_p=3, max_q=3, 
+                      m=1,              
+                      d=None,         
+                      seasonal=False,  
+                      start_P=0, 
+                      D=0, 
+                      trace=True,
+                      error_action='ignore',  
+                      suppress_warnings=True, 
+                      stepwise=True)
+print(model.summary())
+
+mod = sm.tsa.statespace.SARIMAX(Main.Last, order=(1, 1, 1)) 
+mod_fit = mod.fit()
+mod_fit.plot_diagnostics(figsize=(10,6))
+plt.show()
+
+model = ARIMA(Main.Last, order=(1,1,1))
+model_fit = model.fit(disp=0)
+print(model_fit.forecast(100))
+
+sns.set_style('darkgrid')
+Fcast = pd.read_excel('AA_Fcast.xlsx', parse_dates=['Date'], index_col='Date')
+a = Fcast.loc[Fcast.index <= '2020-05-18']
+b = Fcast.loc[Fcast.index > '2020-05-18']
+sns.lineplot(x=a.index, y=a.Last)
+sns.lineplot(x =b.index, y=b.Last, palette='mako_r')
+plt.legend(['observed', 'forecast'])
+plt.title('Forecast up to October 5th 2020')
