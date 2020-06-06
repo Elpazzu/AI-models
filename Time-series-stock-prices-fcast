@@ -26,10 +26,10 @@ where = urllib.parse.quote_plus("""
 """)
 url = 'https://parseapi.back4app.com/classes/Moviesdatabase_Movie?limit=100000&order=title&excludeKeys=year&where=%s' % where
 headers = {
-    'X-Parse-Application-Id': 'uuUjR3UJyMVD4dlCq9CC5wPQJM689mjeRm3dSRM9', # This is your app's application id
-    'X-Parse-REST-API-Key': 'J1wXpL4VItJD8qsuhiyjtCvF0ok4lRHR35G0bvKk' # This is your app's REST API key
+    'X-Parse-Application-Id': 'uuUjR3UJyMVD4dlCq9CC5wPQJM689mjeRm3dSRM9', 
+    'X-Parse-REST-API-Key': 'xxx'
 }
-data = json.loads(requests.get(url, headers=headers).content.decode('utf-8')) # Here you have the data that you need
+data = json.loads(requests.get(url, headers=headers).content.decode('utf-8'))
 
 where = urllib.parse.quote_plus("""
 {
@@ -40,10 +40,10 @@ where = urllib.parse.quote_plus("""
 """)
 url = 'https://parseapi.back4app.com/classes/Moviesdatabase_Star?limit=100000&order=name&where=%s' % where
 headers = {
-    'X-Parse-Application-Id': 'uuUjR3UJyMVD4dlCq9CC5wPQJM689mjeRm3dSRM9', # This is your app's application id
-    'X-Parse-REST-API-Key': 'J1wXpL4VItJD8qsuhiyjtCvF0ok4lRHR35G0bvKk' # This is your app's REST API key
+    'X-Parse-Application-Id': 'uuUjR3UJyMVD4dlCq9CC5wPQJM689mjeRm3dSRM9', 
+    'X-Parse-REST-API-Key': 'xxx'
 }
-data = json.loads(requests.get(url, headers=headers).content.decode('utf-8')) # Here you have the data that you need
+data = json.loads(requests.get(url, headers=headers).content.decode('utf-8'))
 
 with open('data.json', 'w') as json_file:
     json.dump(data, json_file)
