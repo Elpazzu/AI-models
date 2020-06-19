@@ -26,7 +26,7 @@ where = urllib.parse.quote_plus("""
 """)
 url = 'https://parseapi.back4app.com/classes/Moviesdatabase_Movie?limit=100000&order=title&excludeKeys=year&where=%s' % where
 headers = {
-    'X-Parse-Application-Id': 'uuUjR3UJyMVD4dlCq9CC5wPQJM689mjeRm3dSRM9', 
+    'X-Parse-Application-Id': 'xxx', 
     'X-Parse-REST-API-Key': 'xxx'
 }
 data = json.loads(requests.get(url, headers=headers).content.decode('utf-8'))
