@@ -1,0 +1,27 @@
+import numpy as np
+import tensorflow as tf
+import librosa   
+import IPython.display as ipd
+
+sample, sample_rate = librosa.load(r'C:\Users\makra\OneDrive\Desktop\Conda\Speech-to-text\six.wav', sr = 16000)
+print(sample.shape)
+ipd.Audio(sample, rate=sample_rate)
+sample = librosa.resample(sample, sample_rate, 4166.5)
+ipd.Audio(sample, rate=4166.5)
+print(sample.shape)
+
+with open('best_model.json', 'r') as json_file:
+    json_savedModel= json_file.read()
+
+model = tf.keras.models.model_from_json(json_savedModel)
+model.load_weights('best_model_weights.hdf5')
+model.compile(loss='categorical_crossentropy',optimizer='adam',metrics=['accuracy'])
+
+a=["eight", "five", "four", "nine", "one", "seven", "six", "three", "two", "zero"]
+
+def predict(audio):
+    prob=model.predict(audio.reshape(1,8000,1))
+    index=np.argmax(prob)
+    return a[index]
+
+print(predict(sample))
