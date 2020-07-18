@@ -5,7 +5,7 @@ CHUNK = 1024
 FORMAT = pyaudio.paInt16
 CHANNELS = 2
 RATE = 8000
-RECORD_SECONDS = 2
+RECORD_SECONDS = 1
 WAVE_OUTPUT_FILENAME = "eight.wav"
 
 p = pyaudio.PyAudio()
