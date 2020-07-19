@@ -6,8 +6,8 @@ import IPython.display as ipd
 sample, sample_rate = librosa.load(r'C:\Users\makra\OneDrive\Desktop\Conda\Speech-to-text\six.wav', sr = 16000)
 print(sample.shape)
 ipd.Audio(sample, rate=sample_rate)
-sample = librosa.resample(sample, sample_rate, 4166.5)
-ipd.Audio(sample, rate=4166.5)
+sample = librosa.resample(sample, sample_rate, 8000)
+ipd.Audio(sample, rate=8000)
 print(sample.shape)
 
 with open('best_model.json', 'r') as json_file:
