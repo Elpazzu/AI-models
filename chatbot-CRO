@@ -47,7 +47,7 @@ def greeting(sentence):
 def response(user_response):
     robo_response=''
     sent_tokens.append(user_response)
-    TfidfVec = TfidfVectorizer(tokenizer=LemNormalize, stop_words='english')
+    TfidfVec = TfidfVectorizer(tokenizer=LemNormalize)
     tfidf = TfidfVec.fit_transform(sent_tokens)
     vals = cosine_similarity(tfidf[-1], tfidf)
     idx=vals.argsort()[0][-2]
@@ -62,7 +62,7 @@ def response(user_response):
         return robo_response
     
 flag=True
-print("CRO-BOT: My name is CRO-BOT. I will answer your questions about Chief Robotics Officers. If you want to exit, type Bye!")
+print("CRO-BOT: My name is CRO-BOT. I will answer your questions about Chief Robotics Officers based on Robotics Business Review's CRO Whitepaper (https://www.ciowhitepapersreview.com/whitepaper_file/1504698797_57123311_467093052CIO-Review-Whitepaper.pdf). If you want to exit, type Bye!")
 while(flag==True):
     user_response = input()
     user_response=user_response.lower()
