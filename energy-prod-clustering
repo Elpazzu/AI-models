@@ -1,0 +1,21 @@
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
+import scipy.cluster.hierarchy as shc
+from sklearn.cluster import AgglomerativeClustering
+
+eurostat_energy_data = pd.read_excel('eurostat-energy-data.xls')
+print(eurostat_energy_data.shape)
+
+data = eurostat_energy_data.iloc[:, 2:12].values
+
+plt.figure(figsize=(10, 7))
+plt.title("Energy Production Dendograms")
+dend = shc.dendrogram(shc.linkage(data, method='ward'))
+
+cluster = AgglomerativeClustering(n_clusters=4, affinity='euclidean', linkage='ward')
+cluster.fit_predict(data)
+print(cluster.fit_predict(data))
+
+plt.figure(figsize=(10, 7))
+plt.scatter(data[:,0], data[:,1], c=cluster.labels_, cmap='rainbow')
