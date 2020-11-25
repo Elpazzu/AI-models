@@ -1,0 +1,96 @@
+from io import StringIO
+from pdfminer.converter import TextConverter
+from pdfminer.layout import LAParams
+from pdfminer.pdfdocument import PDFDocument
+from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
+from pdfminer.pdfpage import PDFPage
+from pdfminer.pdfparser import PDFParser
+    
+def convert_pdf_to_string(file_path):
+	output_string = StringIO()
+	with open(file_path, 'rb') as in_file:
+	    parser = PDFParser(in_file)
+	    doc = PDFDocument(parser)
+	    rsrcmgr = PDFResourceManager()
+	    device = TextConverter(rsrcmgr, output_string, laparams=LAParams())
+	    interpreter = PDFPageInterpreter(rsrcmgr, device)
+	    for page in PDFPage.create_pages(doc):
+	        interpreter.process_page(page)
+	return(output_string.getvalue())
+                
+def convert_title_to_filename(title):
+    filename = title.lower()
+    filename = filename.replace(' ', '_')
+    return filename
+
+def split_to_title_and_pagenum(table_of_contents_entry):
+    title_and_pagenum = table_of_contents_entry.strip()   
+    title = None
+    pagenum = None    
+    if len(title_and_pagenum) > 0:
+        if title_and_pagenum[-1].isdigit():
+            i = -2
+            while title_and_pagenum[i].isdigit():
+                i -= 1
+            title = title_and_pagenum[:i].strip()
+            pagenum = int(title_and_pagenum[i:].strip())     
+    return title, pagenum
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+import PyPDF2
+import data_func
+import csv
+
+reader = PyPDF2.PdfFileReader('Complete_Works_Lovecraft.pdf')
+num_of_pages = reader.numPages
+#print(reader.documentInfo)
+#print(reader.numPages)
+#print(reader.getPage(7-1).extractText())
+
+writer = PyPDF2.PdfFileWriter()
+
+for page in range(2,4):
+    writer.addPage(reader.getPage(page))
+  
+output_filename = 'table_of_contents.pdf'
+
+with open(output_filename, 'wb') as output:
+    writer.write(output)
+    
+text = data_func.convert_pdf_to_string('table_of_contents.pdf')
+text = text.replace('.','')
+text = text.replace('\x0c','')
+table_of_contents_raw = text.split('\n')
+
+title_list = []
+pagenum_list = []
+title_formatted_list = []
+for item in table_of_contents_raw:
+        title, pagenum = \
+            data_func.split_to_title_and_pagenum(item)
+        if title != None:
+            title_list.append(title)
+            pagenum_list.append(pagenum)
+            title_formatted_list.append(
+                data_func.convert_title_to_filename(title))            
+pagenum_list.append(num_of_pages + 1)
+
+for i in range(1, len(title_formatted_list)):
+    title_formatted = title_formatted_list[i]
+    page_start = pagenum_list[i] - 1
+    page_end = pagenum_list[i+1] - 2
+    
+    writer = PyPDF2.PdfFileWriter()
+
+    for page in range(page_start,page_end + 1):
+        writer.addPage(reader.getPage(page))
+    
+    output_filename = '' + title_formatted + '.pdf'
+
+    with open(output_filename, 'wb') as output:
+        writer.write(output)
+        
+with open('table_of_contents.csv', 'a') as f:
+    writer = csv.writer(f)
+    writer.writerows(zip(title_list, pagenum_list, title_formatted_list))
