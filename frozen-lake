@@ -1,0 +1,93 @@
+import gym
+import numpy as np
+env = gym.make('FrozenLake-v0')
+
+def policy_evaluation(policy, environment, discount_factor=1.0, theta=1e-9, max_iterations=1e9):
+        evaluation_iterations = 1
+        V = np.zeros(environment.nS)
+        for i in range(int(max_iterations)):
+                delta = 0
+                for state in range(environment.nS):
+                       v = 0
+                       for action, action_probability in enumerate(policy[state]):
+                             for state_probability, next_state, reward, terminated in environment.P[state][action]:
+                                  v += action_probability * state_probability * (reward + discount_factor * V[next_state])
+                       
+                       delta = max(delta, np.abs(V[state] - v))
+                       V[state] = v
+                evaluation_iterations += 1
+                
+                if delta < theta:
+                        print(f'Policy evaluated in {evaluation_iterations} iterations.')
+                        return V
+
+def one_step_lookahead(environment, state, V, discount_factor):
+        action_values = np.zeros(environment.nA)
+        for action in range(environment.nA):
+                for probability, next_state, reward, terminated in environment.P[state][action]:
+                        action_values[action] += probability * (reward + discount_factor * V[next_state])
+        return action_values
+
+def policy_iteration(environment, discount_factor=1.0, max_iterations=1e9):
+        policy = np.ones([environment.nS, environment.nA]) / environment.nA
+        evaluated_policies = 1
+        for i in range(int(max_iterations)):
+                stable_policy = True
+                V = policy_evaluation(policy, environment, discount_factor=discount_factor)
+                for state in range(environment.nS):
+                        current_action = np.argmax(policy[state])
+                        action_value = one_step_lookahead(environment, state, V, discount_factor)
+                        best_action = np.argmax(action_value)
+                        if current_action != best_action:
+                                stable_policy = True
+                                policy[state] = np.eye(environment.nA)[best_action]
+                evaluated_policies += 1
+                if stable_policy:
+                        print(f'Evaluated {evaluated_policies} policies.')
+                        return policy, V
+
+def value_iteration(environment, discount_factor=1.0, theta=1e-9, max_iterations=1e9):
+        V = np.zeros(environment.nS)
+        for i in range(int(max_iterations)):
+                delta = 0
+                for state in range(environment.nS):
+                        action_value = one_step_lookahead(environment, state, V, discount_factor)
+                        best_action_value = np.max(action_value)
+                        delta = max(delta, np.abs(V[state] - best_action_value))
+                        V[state] = best_action_value
+                if delta < theta:
+                        print(f'Value-iteration converged at iteration#{i}.')
+                        break
+
+        policy = np.zeros([environment.nS, environment.nA])
+        for state in range(environment.nS):
+                action_value = one_step_lookahead(environment, state, V, discount_factor)
+                best_action = np.argmax(action_value)
+                policy[state, best_action] = 1.0
+        return policy, V
+
+def play_episodes(environment, n_episodes, policy):
+        wins = 0
+        total_reward = 0
+        for episode in range(n_episodes):
+                terminated = False
+                state = environment.reset()
+                while not terminated:
+                        action = np.argmax(policy[state])
+                        next_state, reward, terminated, info = environment.step(action)
+                        total_reward += reward
+                        state = next_state
+                        if terminated and reward == 1.0:
+                                wins += 1
+        average_reward = total_reward / n_episodes
+        return wins, total_reward, average_reward
+
+n_episodes = 10000
+solvers = [('Policy Iteration', policy_iteration),
+           ('Value Iteration', value_iteration)]
+for iteration_name, iteration_func in solvers:
+        environment = gym.make('FrozenLake-v0')
+        policy, V = iteration_func(environment.env)
+        wins, total_reward, average_reward = play_episodes(environment, n_episodes, policy)
+        print(f'{iteration_name} :: number of wins over {n_episodes} episodes = {wins}')
+        print(f'{iteration_name} :: average reward over {n_episodes} episodes = {average_reward} \n\n')
