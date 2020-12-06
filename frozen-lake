@@ -1,5 +1,8 @@
 import gym
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
 env = gym.make('FrozenLake-v0')
 
 def policy_evaluation(policy, environment, discount_factor=1.0, theta=1e-9, max_iterations=1e9):
@@ -12,15 +15,13 @@ def policy_evaluation(policy, environment, discount_factor=1.0, theta=1e-9, max_
                        for action, action_probability in enumerate(policy[state]):
                              for state_probability, next_state, reward, terminated in environment.P[state][action]:
                                   v += action_probability * state_probability * (reward + discount_factor * V[next_state])
-                       
                        delta = max(delta, np.abs(V[state] - v))
                        V[state] = v
                 evaluation_iterations += 1
-                
                 if delta < theta:
                         print(f'Policy evaluated in {evaluation_iterations} iterations.')
                         return V
-
+                    
 def one_step_lookahead(environment, state, V, discount_factor):
         action_values = np.zeros(environment.nA)
         for action in range(environment.nA):
@@ -66,6 +67,23 @@ def value_iteration(environment, discount_factor=1.0, theta=1e-9, max_iterations
                 policy[state, best_action] = 1.0
         return policy, V
 
+V_4, P_4 = policy_iteration(env)
+
+nb_states = env.observation_space.n
+desc = env.unwrapped.desc.ravel().astype(str)
+colors = np.where(desc=='S','y',np.where(desc=='F','b',np.where(desc=='H','r',np.where(desc=='G','g',desc))))
+states_labels = np.zeros(nb_states).astype(str)
+states_labels[:] = ''
+total_reward = 0
+#env.render()
+ax = sns.heatmap(P_4.reshape(int(np.sqrt(nb_states)),int(np.sqrt(nb_states))), 
+             linewidth=0.5, 
+             annot=states_labels.reshape(int(np.sqrt(nb_states)),int(np.sqrt(nb_states))), 
+             cmap=list(colors),
+             fmt = '',
+             cbar=False)
+plt.show()
+    
 def play_episodes(environment, n_episodes, policy):
         wins = 0
         total_reward = 0
