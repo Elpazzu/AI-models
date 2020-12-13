@@ -1,0 +1,82 @@
+import pandas as pd
+import geopandas as gpd
+from geopandas import GeoDataFrame
+import matplotlib.pyplot as plt
+from fiona.crs import from_epsg
+from shapely.geometry import Point, Polygon, LineString, MultiLineString
+from descartes import PolygonPatch
+
+map_df = gpd.read_file("BELGIUM_-_Municipalities.shp")
+f, ax = plt.subplots(1, figsize=(6, 6))
+ax = map_df.plot(ax=ax)
+ax.set_axis_off()
+print(map_df.crs)
+
+data_df = pd.read_csv("belgium-munic-data.csv")
+combined = map_df.set_index("Communes").join(data_df.set_index("Commune")).reset_index()
+
+fig, ax = plt.subplots(1, figsize=(6, 6))
+combined.plot(column="2020pt", cmap="viridis", linewidth=0.8, ax=ax)
+ax.axis("off")
+
+vmin = 0.
+vmax = 2.
+sm = plt.cm.ScalarMappable(cmap="viridis", norm=plt.Normalize(vmin=vmin, vmax=vmax))
+sm._A = []
+cbar = fig.colorbar(sm)
+
+fp = r"addresses.txt"
+df = pd.read_csv(fp, sep=';')
+geometry = [Point(xy) for xy in zip(df.Lon, df.Lat)]
+df = df.drop(['Lon', 'Lat'], axis=1)
+gdfblg = GeoDataFrame(df, crs="EPSG:4326", geometry=geometry)
+outfp = "addresses.shp"
+gdfblg.to_file(outfp)
+fp="addresses.shp"
+data = gpd.read_file(fp)
+#print(data['geometry'])
+
+data_proj = data.copy()
+data_proj['geometry'] = data_proj['geometry'].to_crs(epsg=31370)
+print(data_proj['geometry'])
+
+data.plot(markersize=6, color="red")
+plt.title("WGS84 projection")
+plt.tight_layout()
+
+data_proj.plot(markersize=6, color="blue")
+plt.title("EPSG 31370")
+plt.tight_layout()
+
+data_proj.crs = from_epsg(31370)
+print(data_proj.crs)
+data_proj.crs = {'y_0': 0, 'no_defs': True, 'x_0': 25500000, 'k': 1, 'lat_0': 0, 'units': 'm', 'lon_0': 25, 'ellps': 'GRS80', 'proj': 'tmerc'}
+print(data_proj.crs)
+outfp = "addresses_epsg31370.shp"
+data_proj.to_file(outfp)
+
+p1 = Point(50.83471, 4.35810)
+p2 = Point(50.951732, 3.135312)
+p3 = Point(51.03193796602693, 4.460757984010603)
+p4 = Point(51.07509735407726, 3.777236939835849)
+p5 = Point(50.80141767513357, 4.341446128175829)
+p6 = Point(51.20185132896745, 4.405783411006908)
+p7 = Point(50.86233500515666, 5.501777268660424)
+p8 = Point(50.73729512072621, 4.495243895641745)
+p9 = Point(50.629617209321204, 5.569391728167127)
+
+coords1 = [p1, p2, p3, p4, p5]
+coords2 = [p6, p7, p8, p9]
+poly1 = Polygon(coords1)
+poly2 = Polygon(coords2)
+print("poly1 :", poly1)
+print("poly2 :", poly2)
+x,y = poly2.exterior.xy
+f, ax = plt.subplots(1, figsize=(6, 6))
+ax.plot(x, y, color='#6699cc', alpha=0.7, linewidth=3, solid_capstyle='round', zorder=2)
+ax.set_title('Polygon')
+
+poly1_area = poly1.area
+print("Poly1 area is: " + str(poly1_area))
+poly2_area = poly2.area
+print("Poly2 area is: " + str(poly2_area))
