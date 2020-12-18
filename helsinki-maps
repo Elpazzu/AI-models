@@ -1,0 +1,244 @@
+import geopandas as gpd
+import matplotlib.pyplot as plt
+import pysal as ps
+import mapclassify as mc
+import pandas as pd
+import numpy as np
+from bokeh.palettes import YlOrRd as palette
+from bokeh.plotting import figure, save
+from bokeh.models import ColumnDataSource, HoverTool, LogColorMapper
+from bokeh.palettes import RdYlGn10 as palette 
+
+grid_fp = r"TravelTimes_to_5975375_RailwayStation.shp"
+roads_fp = r"roads.shp"
+metro_fp = r"metro.shp"
+
+grid = gpd.read_file(grid_fp)
+roads = gpd.read_file(roads_fp)
+metro = gpd.read_file(metro_fp)
+
+gridCRS = grid.crs
+#print(gridCRS)
+
+roads['geometry'] = roads['geometry'].to_crs(crs=gridCRS)
+metro['geometry'] = metro['geometry'].to_crs(crs=gridCRS)
+
+my_map = grid.plot(column="car_r_t", linewidth=0.03, cmap="Reds", k=9, alpha=0.9)
+
+roads.plot(ax=my_map, color="grey", linewidth=1.5)
+
+metro.plot(ax=my_map, color="red", linewidth=2.5)
+
+plt.tight_layout()
+
+outfp = r"static_map.png"
+plt.savefig(outfp, dpi=300)
+
+points_fp = r"addresses.shp"
+points = gpd.read_file(points_fp)
+#print(points.head())
+
+def getPointCoords(row, geom, coord_type):
+    if coord_type == 'x':
+        return row[geom].x
+    elif coord_type == 'y':
+        return row[geom].y
+
+points['x'] = points.apply(getPointCoords, geom='geometry', coord_type='x', axis=1)
+
+points['y'] = points.apply(getPointCoords, geom='geometry', coord_type='y', axis=1)
+#print(points.head())
+
+p_df = points.drop('geometry', axis=1).copy()
+#print(p_df.head())
+
+psource = ColumnDataSource(p_df)
+#print(psource)
+
+p = figure(title="Map of Helsinki address points")
+
+p.circle('x', 'y', source=psource, color='red', size=10)
+
+outfp = r"point_map.html"
+save(p, outfp)
+
+my_hover = HoverTool()
+my_hover.tooltips = [('Address of the point', '@address')]
+p.add_tools(my_hover)
+
+outfp = r"point_map_hover.html"
+save(p, outfp)
+
+metro_fp = r"metro.shp"
+metro = gpd.read_file(metro_fp)
+#print(metro.head())
+
+def getLineCoords(row, geom, coord_type):
+    if coord_type == 'x':
+        return list( row[geom].coords.xy[0] )
+    elif coord_type == 'y':
+        return list( row[geom].coords.xy[1] )
+  
+metro['x'] = metro.apply(getLineCoords, geom='geometry', coord_type='x', axis=1)
+
+metro['y'] = metro.apply(getLineCoords, geom='geometry', coord_type='y', axis=1)
+#print(metro.head())
+
+m_df = metro.drop('geometry', axis=1).copy()
+msource = ColumnDataSource(m_df)
+
+p = figure(title="Map of Helsinki metro")
+
+p.multi_line('x', 'y', source=msource, color='red', line_width=3)
+
+outfp = "metro_map.html"
+save(p, outfp)
+
+fp = r"TravelTimes_to_5975375_RailwayStation.shp"
+roads_fp = r"roads.shp"
+metro_fp = r"metro.shp" 
+
+data = gpd.read_file(fp)
+roads = gpd.read_file(roads_fp)
+metro = gpd.read_file(metro_fp)
+
+data['geometry'] = data['geometry'].to_crs(epsg=3067)
+roads['geometry'] = roads['geometry'].to_crs(epsg=3067)
+metro['geometry'] = metro['geometry'].to_crs(epsg=3067)
+
+def getXYCoords(geometry, coord_type):
+    if coord_type == 'x':
+        return geometry.coords.xy[0]
+    elif coord_type == 'y':
+        return geometry.coords.xy[1]
+
+def getPolyCoords(geometry, coord_type):
+    ext = geometry.exterior
+    return getXYCoords(ext, coord_type)
+    
+def getLineCoords(geometry, coord_type):
+    return getXYCoords(geometry, coord_type)
+
+def getPointCoords(geometry, coord_type):
+    if coord_type == 'x':
+        return geometry.x
+    elif coord_type == 'y':
+        return geometry.y
+    
+def multiGeomHandler(multi_geometry, coord_type, geom_type):    
+    for i, part in enumerate(multi_geometry):
+        if i == 0:
+            if geom_type == "MultiPoint":
+                coord_arrays = np.append(getPointCoords(part, coord_type), np.nan)
+            elif geom_type == "MultiLineString":
+                coord_arrays = np.append(getLineCoords(part, coord_type), np.nan)
+            elif geom_type == "MultiPolygon":
+                coord_arrays = np.append(getPolyCoords(part, coord_type), np.nan)
+        else:
+            if geom_type == "MultiPoint":
+                coord_arrays = np.concatenate([coord_arrays, np.append(getPointCoords(part, coord_type), np.nan)])
+            elif geom_type == "MultiLineString":
+                coord_arrays = np.concatenate([coord_arrays, np.append(getLineCoords(part, coord_type), np.nan)])
+            elif geom_type == "MultiPolygon":
+                coord_arrays = np.concatenate([coord_arrays, np.append(getPolyCoords(part, coord_type), np.nan)])
+    
+    return coord_arrays
+    
+def getCoords(row, geom_col, coord_type):
+    geom = row[geom_col]
+    
+    gtype = geom.geom_type
+    
+    if gtype == "Point":
+        return getPointCoords(geom, coord_type)
+    elif gtype == "LineString":
+        return list( getLineCoords(geom, coord_type) )
+    elif gtype == "Polygon":
+        return list( getPolyCoords(geom, coord_type) )    
+    else:
+        return list( multiGeomHandler(geom, coord_type, gtype) )
+
+data['x'] = data.apply(getCoords, geom_col="geometry", coord_type="x", axis=1)
+data['y'] = data.apply(getCoords, geom_col="geometry", coord_type="y", axis=1)
+
+roads['x'] = roads.apply(getCoords, geom_col="geometry", coord_type="x", axis=1)
+roads['y'] = roads.apply(getCoords, geom_col="geometry", coord_type="y", axis=1)
+
+metro['x'] = metro.apply(getCoords, geom_col="geometry", coord_type="x", axis=1)
+metro['y'] = metro.apply(getCoords, geom_col="geometry", coord_type="y", axis=1)
+
+data = data.replace(-1, 999)
+
+breaks = [x for x in range(5, 200, 5)]
+
+classifier = mc.UserDefined(data, bins=breaks)
+pt_classif = data['pt_r_tt'].apply(classifier)
+car_classif = data['car_r_t'].apply(classifier)
+
+pt_classif.name = 'pt_r_tt_ud'
+car_classif.name = 'car_r_t_ud'
+
+data = data.join(pt_classif)
+data = data.join(car_classif)
+
+upper_limit = 60
+step = 5
+names = ["%s-%s " % (x-5, x) for x in range(step, upper_limit, step)]
+names.append("%s <" % upper_limit)
+
+data['label_pt'] = None
+data['label_car'] = None
+
+for i in range(len(names)):
+    data.loc[data['pt_r_tt_ud'] == i, 'label_pt'] = names[i]
+    data.loc[data['car_r_t_ud'] == i, 'label_car'] = names[i]
+
+data['label_pt'] = data['label_pt'].fillna("%s <" % upper_limit)
+data['label_car'] = data['label_car'].fillna("%s <" % upper_limit)
+
+df = data[['x', 'y', 'pt_r_tt_ud', 'pt_r_tt', 'car_r_t', 'from_id', 'label_pt']]
+dfsource = ColumnDataSource(data=df)
+
+rdf = roads[['x', 'y']]
+rdfsource = ColumnDataSource(data=rdf)
+
+mdf = metro[['x','y']]
+mdfsource = ColumnDataSource(data=mdf)
+
+TOOLS = "pan,wheel_zoom,box_zoom,reset,save"
+
+color_mapper = LogColorMapper(palette=palette)
+
+p = figure(title="Travel times to Helsinki city center by public transportation", tools=TOOLS, 
+           plot_width=650, plot_height=500, active_scroll = "wheel_zoom" ) 
+
+p.grid.grid_line_color = None
+
+grid = p.patches('x', 'y', source=dfsource, name="grid",
+         fill_color={'field': 'pt_r_tt_ud', 'transform': color_mapper},
+         fill_alpha=1.0, line_color="black", line_width=0.03, legend="label_pt")
+
+r = p.multi_line('x', 'y', source=rdfsource, color="grey")
+
+m = p.multi_line('x', 'y', source=mdfsource, color="red")
+
+p.legend.location = "top_right"
+p.legend.orientation = "vertical"
+
+station_x = 385752.214
+station_y =  6672143.803
+circle = p.circle(x=[station_x], y=[station_y], name="point", size=6, color="yellow")
+
+phover = HoverTool(renderers=[circle])
+phover.tooltips=[("Destination", "Railway Station")]
+
+ghover = HoverTool(renderers=[grid])
+ghover.tooltips=[("YKR-ID", "@from_id"),
+                ("PT time", "@pt_r_tt"),
+                ("Car time", "@car_r_t")]
+
+p.add_tools(ghover)
+p.add_tools(phover)
+
+output_file = r"accessibility_map_Helsinki.html"
+save(p, output_file)
