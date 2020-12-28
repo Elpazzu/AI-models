@@ -1,0 +1,159 @@
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+import torchvision
+import torchvision.transforms as transforms
+import numpy as np
+import pandas as pd
+import pdb
+import matplotlib.pyplot as plt
+
+train_set = torchvision.datasets.FashionMNIST(
+    root='./data'
+    ,train=True
+    ,download=True
+    ,transform=transforms.Compose([transforms.ToTensor()]))
+
+train_loader = torch.utils.data.DataLoader(train_set
+    ,batch_size=1000
+    ,shuffle=True)
+
+#print(len(train_set))
+#print(train_set.targets)
+#print(train_set.targets.bincount())
+
+sample = next(iter(train_set))
+#print(type(sample))
+#print(sample[0].shape)
+#print(sample[1])
+#print(sample[0].squeeze().shape)
+#plt.imshow(sample[0].squeeze(), cmap="gray")
+
+display_loader = torch.utils.data.DataLoader(train_set, batch_size=10)
+batch = next(iter(display_loader))
+#print('len:', len(batch))
+images, labels = batch
+#print('types:', type(images), type(labels))
+#print('shapes:', images.shape, labels.shape)
+
+grid = torchvision.utils.make_grid(images, nrow=10)
+#plt.figure(figsize=(15,15))
+#plt.imshow(np.transpose(grid, (1,2,0)))
+#print('labels:', labels)
+
+class Network(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=6, kernel_size=5)
+        self.conv2 = nn.Conv2d(in_channels=6, out_channels=12, kernel_size=5)
+        self.fc1 = nn.Linear(in_features=12 * 4 * 4, out_features=120)
+        self.fc2 = nn.Linear(in_features=120, out_features=60)
+        self.out = nn.Linear(in_features=60, out_features=10)
+
+    def forward(self, t):
+        t = t
+
+        t = self.conv1(t)
+        t = F.relu(t)
+        t = F.max_pool2d(t, kernel_size=2, stride=2)
+
+        t = self.conv2(t)
+        t = F.relu(t)
+        t = F.max_pool2d(t, kernel_size=2, stride=2)
+
+        t = t.reshape(-1, 12 * 4 * 4)
+        t = self.fc1(t)
+        t = F.relu(t)
+
+        t = self.fc2(t)
+        t = F.relu(t)
+
+        t = self.out(t)
+        
+        return t
+
+network = Network()
+#print(network)
+#print(network.conv1)
+#print(network.conv1.weight)
+#print(network.conv1.weight.shape)
+#print(network.conv2.weight.shape)
+
+#for param in network.parameters():
+#    print(param.shape)
+
+preds = network(images)
+#print(preds.shape)
+#print(preds)
+#print(preds.argmax(dim=1))
+#print(labels)
+#print(preds.argmax(dim=1).eq(labels))
+
+train_loader = torch.utils.data.DataLoader(train_set, batch_size=100)
+batch = next(iter(train_loader))
+images, labels = batch
+preds = network(images)
+loss = F.cross_entropy(preds, labels)
+#print(loss.item())
+#print(preds.argmax(dim=1).eq(labels).sum())
+loss.backward()
+
+optimizer = optim.Adam(network.parameters(), lr=0.01)
+optimizer.step()
+preds = network(images)
+loss.item()
+loss = F.cross_entropy(preds, labels)
+#print(preds.argmax(dim=1).eq(labels).sum())
+
+train_loader = torch.utils.data.DataLoader(train_set, batch_size=100)
+optimizer = optim.Adam(network.parameters(), lr=0.01)
+
+total_loss = 0
+total_correct = 0
+
+def get_num_correct(preds, labels):
+    return preds.argmax(dim=1).eq(labels).sum().item()
+
+for batch in train_loader:
+    images, labels = batch 
+
+    preds = network(images)
+    loss = F.cross_entropy(preds, labels)
+
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+
+    total_loss += loss.item()
+    total_correct += get_num_correct(preds, labels)
+
+#print(
+#    "epoch:", 0, 
+#    "total_correct:", total_correct, 
+#    "loss:", total_loss)
+
+#print(total_correct / len(train_set))
+
+for epoch in range(10):
+
+    total_loss = 0
+    total_correct = 0
+
+    for batch in train_loader:
+        images, labels = batch 
+
+        preds = network(images)
+        loss = F.cross_entropy(preds, labels)
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        total_loss += loss.item()
+        total_correct += get_num_correct(preds, labels)
+
+    print(
+        "epoch", epoch, 
+        "total_correct:", total_correct, 
+        "loss:", total_loss)
