@@ -1,0 +1,97 @@
+import pyspark
+from pyspark.sql import SparkSession
+import pandas as pd
+from pandas.plotting import scatter_matrix
+from pyspark.sql.functions import isnull, when, count, col
+from pyspark.ml.feature import VectorAssembler
+from pyspark.ml.classification import RandomForestClassifier
+from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+from pyspark.ml.classification import DecisionTreeClassifier
+from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+from pyspark.ml.classification import LogisticRegression
+from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+from pyspark.ml.classification import GBTClassifier
+from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+
+#print(pyspark.__version__)
+spark = SparkSession.builder.appName('ml-diabetes').getOrCreate()
+df = spark.read.csv('diabetes.csv', header=True, inferSchema=True)
+#df.printSchema()
+
+pd.DataFrame(df.take(5), columns=df.columns).transpose()
+df.toPandas()
+df1 = df.groupby('Outcome').count().toPandas()
+#print(df1)
+
+numeric_features = [t[0] for t in df.dtypes if t[1] == 'int']
+df2 = df.select(numeric_features).describe().toPandas().transpose()
+#print(df2)
+
+numeric_data = df.select(numeric_features).toPandas()
+
+axs = scatter_matrix(numeric_data, figsize=(8, 8));
+
+# Rotate axis labels and remove axis ticks
+n = len(numeric_data.columns)
+for i in range(n):
+    v = axs[i, 0]
+    v.yaxis.label.set_rotation(0)
+    v.yaxis.label.set_ha('right')
+    v.set_yticks(())
+    h = axs[n-1, i]
+    h.xaxis.label.set_rotation(90)
+    h.set_xticks(())
+#df.select([count(when(isnull(c), c)).alias(c) for c in df.columns]).show()
+
+df = df.drop('SkinThickness')
+df = df.drop('Insulin')
+df = df.drop('DiabetesPedigreeFunction')
+df = df.drop('Pregnancies')
+#df.show()
+
+# Assemble all the features with VectorAssembler
+required_features = ['Glucose',
+                    'BloodPressure',
+                    'BMI',
+                    'Age']
+
+assembler = VectorAssembler(inputCols=required_features, outputCol='features')
+
+transformed_data = assembler.transform(df)
+#transformed_data.show()
+
+# Split the data
+(training_data, test_data) = transformed_data.randomSplit([0.8,0.2], seed =2020)
+#print("Training Dataset Count: " + str(training_data.count()))
+#print("Test Dataset Count: " + str(test_data.count()))
+
+rf = RandomForestClassifier(labelCol='Outcome', 
+                            featuresCol='features',
+                            maxDepth=5)
+model = rf.fit(training_data)
+rf_predictions = model.transform(test_data)
+
+multi_evaluator = MulticlassClassificationEvaluator(labelCol = 'Outcome', metricName = 'accuracy')
+print('Random Forest classifier Accuracy:', multi_evaluator.evaluate(rf_predictions))
+
+dt = DecisionTreeClassifier(featuresCol = 'features', labelCol = 'Outcome', maxDepth = 3)
+dtModel = dt.fit(training_data)
+dt_predictions = dtModel.transform(test_data)
+dt_predictions.select('Glucose', 'BloodPressure', 'BMI', 'Age', 'Outcome').show(10)
+
+multi_evaluator = MulticlassClassificationEvaluator(labelCol = 'Outcome', metricName = 'accuracy')
+print('Decision Tree Accuracy:', multi_evaluator.evaluate(dt_predictions))
+
+lr = LogisticRegression(featuresCol = 'features', labelCol = 'Outcome', maxIter=10)
+lrModel = lr.fit(training_data)
+lr_predictions = lrModel.transform(test_data)
+
+multi_evaluator = MulticlassClassificationEvaluator(labelCol = 'Outcome', metricName = 'accuracy')
+print('Logistic Regression Accuracy:', multi_evaluator.evaluate(lr_predictions))
+
+gb = GBTClassifier(labelCol = 'Outcome', featuresCol = 'features')
+gbModel = gb.fit(training_data)
+gb_predictions = gbModel.transform(test_data)
+
+multi_evaluator = MulticlassClassificationEvaluator(labelCol = 'Outcome', metricName = 'accuracy')
+print('Gradient-boosted Trees Accuracy:', multi_evaluator.evaluate(gb_predictions))
