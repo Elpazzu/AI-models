@@ -1,0 +1,138 @@
+from games import AbstractGame
+from tictactoe import TicTacToeGame
+from chessboard import ChessGame
+from gomoku import GomokuGame
+import numpy as np
+import random
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torchtrain.modules import TrainableModel
+from utils import hashable
+
+def value(game):
+    if game.over():
+        return -game.score()
+    
+    state_values = []
+    for move in game.valid_moves():
+        game.make_move(move)
+        state_values.append(-value(game)) 
+        game.undo_move()
+	
+    return max(state_values)
+
+def ai_best_move(game):
+	action_dict = {}
+    for move in game.valid_moves():
+        game.make_move(move)
+        action_dict[move] = value(game)
+        game.undo_move()
+
+    return min(action_dict, key=action_dict.get)
+
+def playout_value(game):
+    if game.over():
+        return -game.score()
+    
+    move = random.choice(game.valid_moves())
+    game.make_move(move)
+    value = -playout_value(game))
+    game.undo_move()
+	
+    return value
+
+def monte_carlo_value(game, N=100):
+    scores = [playout_value(game) for i in range(0, N)]
+    return np.mean(scores)
+
+def ai_best_move(game):	
+    action_dict = {}
+    for move in game.valid_moves():
+        game.make_move(move)
+        action_dict[move] = -monte_carlo_value(game)
+        game.undo_move()
+
+    return max(action_dict, key=action_dict.get)
+
+visits = {}
+differential = {}
+
+def heuristic_value(game):
+    N = visits.get("total", 1)
+    Ni = visits.get(hashable(game.state()), 1e-5)
+    V = score.get(hashable(game.state()), 0)*1.0/Ni
+    return V + C*(np.log(N)/Ni)
+
+def record(game, score):
+    visits["total"] = visits.get("total", 1) + 1
+    visits[hashable(game.state()] = visits.get(hashable(game.state(), 0) + 1
+    differential[hashable(game.state()] = differential.get(hashable(game.state(), 0) + score
+
+def playout_value(game):
+    if game.over():
+        record(game, -game.score())
+        return -game.score()
+
+    action_heuristic_dict = {}
+    for move in game.valid_moves():
+        game.make_move(move)
+        action_heuristic_dict[move] = -heuristic_value(game)
+        game.undo_move()
+    move = max(action_heuristic_dict, key=action_heuristic_dict.get)
+    game.make_move(move)
+    value = -playout_value(game)
+    game.undo_move()
+    record(game, value)
+    
+    return value
+
+def monte_carlo_value(game, N=100):
+    scores = [playout_value(game) for i in range(0, N)]
+    return np.mean(scores)
+
+class Net(TrainableModel):
+    
+    def __init__(self):
+
+        super(TrainableModel, self).__init__()
+        self.conv1 = nn.Conv2d(2, 64, kernel_size=[(3, 3), (1, 1)])
+        self.conv2 = nn.Conv2d(64, 128, kernel_size=[(3, 3), (1, 1)])
+        self.conv3 = nn.Conv2d(128, 128, kernel_size=[(3, 3), (1, 1)])
+        self.conv4 = nn.Conv2d(128, 128, kernel_size=[(3, 3), (1, 1)])
+        self.layer1 = nn.Linear(128, 256)
+        self.layer2 = nn.Linear(256, 1)
+
+    def loss(self, data, data_pred):
+        Y_pred = data_pred["target"]
+        Y_target = data["target"]
+        return (F.mse_loss(Y_pred, Y_target))
+
+    def forward(self, data):
+        x = data['input']
+        
+        x = x.view(-1, 2, 19, 19)
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = F.max_pool2d(x, (2, 2))
+        x = F.relu(self.conv3(x))
+        x = F.max_pool2d(x, (2, 2))
+        x = F.relu(self.conv4(x))
+
+        x = F.max_pool2d(x, (4, 4))[:, :, 0, 0]
+        x = F.dropout(x, p=0.2, training=self.training)
+		
+        x = self.layer1(x)
+        x = self.layer2(F.tanh(x))
+
+        return {'target': x}
+
+model = Net()
+
+def record(game, score):
+    dataset = [{'input': game.state(), 'target': score}]
+    model.fit(dataset, batch_size=1, verbose=False)
+
+def heuristic_value(game):
+    dataset = [{'input': game.state(), 'target': None}]
+    return model.predict(dataset).mean()
