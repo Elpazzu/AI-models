@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+import seaborn as sns
 import warnings
 from sklearn.preprocessing import LabelEncoder, normalize, OneHotEncoder
 from sklearn.decomposition import PCA
@@ -70,6 +71,11 @@ pca.fit(X_norm)
 #plt.ylabel('% explained variance')
 #plt.title("Scree plot")
 #plt.show()
+
+corr = X.corr()
+sns.heatmap(corr, 
+        xticklabels=corr.columns,
+        yticklabels=corr.columns)
 
 def find_pca_variables(X):
     interesting_variables = set()
