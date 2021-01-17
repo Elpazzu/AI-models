@@ -1,0 +1,198 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+import warnings
+from sklearn.preprocessing import LabelEncoder, normalize, OneHotEncoder
+from sklearn.decomposition import PCA
+from sklearn.model_selection import train_test_split as tts
+from sklearn.model_selection import cross_validate, cross_val_predict, StratifiedKFold
+from sklearn.linear_model import LogisticRegression as LR
+from sklearn.tree import DecisionTreeClassifier as DT
+from sklearn.ensemble import RandomForestClassifier as RF
+from sklearn.pipeline import make_pipeline
+from sklearn.feature_selection import chi2, mutual_info_classif, mutual_info_regression
+from sklearn.metrics import accuracy_score, roc_auc_score, precision_score
+from pandas.api.types import is_numeric_dtype
+from sklearn.linear_model import LogisticRegression as LR
+from sklearn.tree import DecisionTreeClassifier as DT
+from sklearn.ensemble import RandomForestClassifier as RF
+
+np.random.seed(40)
+
+data = pd.read_csv("churn.csv",sep=',',index_col=0)
+
+y = data['Churn']
+X = data.drop('Churn',axis=1)
+#print(y.value_counts())
+#print(data.describe(include='all'))
+
+def convert_and_remove_categorical_variables(X, to_convert, to_remove):
+    for variable in X.columns:    
+        if variable in to_convert:
+            if len(X[variable].unique()) < 10:
+                X = pd.concat([X,pd.get_dummies(X[variable], prefix=variable, drop_first=True)],axis=1).drop([variable],axis=1)  
+        elif variable in to_remove:
+            X = X.drop([variable],axis=1)
+    return X
+
+to_convert = ['Area_Code', 'International_Plan','Voice_mail_Plan']
+to_remove = ['Phone_Number']
+X = convert_and_remove_categorical_variables(X, to_convert, to_remove)
+
+encoder = LabelEncoder()    
+y = encoder.fit_transform(y)
+
+def return_variables_to_be_retained_or_removed(X):
+    to_retain = set()    
+    X_norm = normalize(X)
+    
+    mir = mutual_info_regression(X_norm, y)
+    mic = mutual_info_classif(X_norm, y)
+    chi = chi2(X_norm, y)
+    
+    mir_mean = mir.mean()
+    mic_mean = mic.mean()
+    chi_mean = chi[0].mean()
+    
+    for i in range(0,(len(X.columns)-1)):
+        if mir[i] >= mir_mean or mic[i] >= mic_mean or chi[0][i] >= chi_mean:
+            to_retain.add(X.columns[i])
+    
+    return to_retain
+
+#print(return_variables_to_be_retained_or_removed(X))
+
+X_norm = normalize(X)
+pca = PCA()
+pca.fit(X_norm)
+#plt.plot(range(1,len(pca.components_)+1),pca.explained_variance_ratio_,'-o')
+#plt.xlabel('components')
+#plt.ylabel('% explained variance')
+#plt.title("Scree plot")
+#plt.show()
+
+def find_pca_variables(X):
+    interesting_variables = set()
+    
+    for i in range(0,5):
+        Z = pd.DataFrame(pca.components_[i], index=X.columns, columns=['values'])
+        a = Z.loc[abs(Z.values) > 0.1].index.values
+        for j in range(len(a)):
+            if a[j] not in interesting_variables:
+                interesting_variables.add(a[j])
+    
+    return interesting_variables
+
+#print(find_pca_variables(X))
+
+warnings.filterwarnings("ignore")
+np.random.seed(42)
+X_train, X_test, y_train, y_test = tts(X, y, test_size = 0.3)
+
+def evaluation_process(X_train, y_train, n_folds, shuffled):
+    np.random.seed(42)
+   
+    models = [LR(), DT(), RF()]
+    metrics = ['roc_auc', 'accuracy', 'precision']    
+    best_mean = []
+    
+    for i in models:
+        classifier = i.fit(X_train, y_train)
+        outcome = cross_validate(classifier, X_train, y_train, scoring=metrics, cv=n_folds, return_train_score=True)
+        a = (outcome['test_accuracy'].mean()+outcome['test_precision'].mean()+outcome['test_roc_auc'].mean())/3
+        best_mean.append(a)
+        if a == max(best_mean):
+            result = i
+
+    best_model = result.fit(X_train, y_train)    
+    return best_model
+
+#print(evaluation_process(X_train, y_train, 5, True))
+
+def get_evaluation_test_set(model, X_test, y_test):    
+    np.random.seed(42)
+    
+    predictions = best_model.predict(X_test)
+    
+    accuracy = accuracy_score(y_test, predictions)
+    precision = precision_score(y_test, predictions)
+    auroc = roc_auc_score(y_test, predictions)
+    
+    return accuracy, precision, auroc
+
+best_model = evaluation_process(X_train, y_train, 5, True)        
+
+#print(get_evaluation_test_set(best_model, X_test, y_test))
+
+def evaluation_process(X_train, y_train, classifier, n_folds, selection_technique, select_best, oversampling):
+    np.random.seed(42)
+    
+    accuracy = 0
+    precision = 0
+    auroc = 0
+    metrics = ['accuracy', 'precision', 'roc_auc']
+    pipeline = make_pipeline(classifier)
+    
+    to_retain = []    
+    X_norm = normalize(X)
+    
+    mir = mutual_info_regression(X_norm, y)
+    chi = chi2(X_norm, y)
+    
+    a=[]
+    b=[]
+    if selection_technique == 'mutual_information':            
+        for i in range(0,(len(X.columns)-1)):
+            a.append(mir[i])
+            a.sort(reverse=True)
+        for i in range(0,(len(X.columns)-1)):
+            if (mir[i]) >= a[select_best-1]:
+                to_retain.append(X.columns[i])
+    elif selection_technique == 'chi2':
+        for i in range(0,(len(X.columns)-1)):
+            a.append(chi[0][i])
+            a.sort(reverse=True)
+        for i in range(0,(len(X.columns)-1)):
+            if (chi[0][i]) >= a[select_best-1]:
+                to_retain.append(X.columns[i])
+    elif selection_technique == 'PCA':
+        for i in range(0,5):
+            Z = pd.DataFrame(pca.components_[i], index=X.columns, columns=['pca_score'])
+            Z['variables'] = Z.index
+            Z_new = Z.loc[(Z['pca_score'] > 0.015)]
+            for k in Z_new.variables:
+                b.append(k)
+        for j in range(len(b)):
+            if b[j] not in to_retain and len(to_retain) < select_best:
+                to_retain.append(b[j])
+    else:
+        for i in range(0,(len(X.columns)-1)):
+            to_retain.append(X.columns[i])
+    
+    pipeline.fit(X_train[to_retain], y_train)
+    outcome = cross_validate(pipeline, X_train[to_retain], y_train, scoring=metrics, cv=n_folds, return_train_score=True)
+    
+    accuracy = outcome['test_accuracy'].mean()
+    precision = outcome['test_precision'].mean()
+    auroc = outcome['test_roc_auc'].mean()
+        
+    return accuracy, precision, auroc
+
+warnings.filterwarnings("ignore")
+
+np.random.seed(42)
+select_best = 2
+
+X_train, X_test, y_train, y_test = tts(X, y, test_size = 0.3)
+
+models = [LR(), DT(), RF()]
+names = ['LogReg','DecTree','RandomFor']
+selection_techniques = ['None','PCA','chi2','mutual_information']
+
+best_mean = 0
+acc = []
+prec = []
+auro = []
+
+accuracy, precision, auroc = evaluation_process(X_train, y_train, RF(), 10, 'PCA', 10, False) 
+#print('Accuracy '+str(accuracy)+", precision: "+str(precision)+", AUC: "+str(auroc))
