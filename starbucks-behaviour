@@ -1,0 +1,239 @@
+import pandas as pd
+import numpy as np
+import math
+import json
+import seaborn as sns
+import matplotlib.pyplot as plt
+import time
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVR
+from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import r2_score
+from sklearn.ensemble import RandomForestRegressor
+
+portfolio = pd.read_json('portfolio.json', orient='records', lines=True)
+profile = pd.read_json('profile.json', orient='records', lines=True)
+transcript = pd.read_json('transcript.json', orient='records', lines=True)
+
+#print(portfolio.head())
+#print(profile.head())
+#print(transcript.head())
+
+#sns.pairplot(portfolio, hue='offer_type')
+#sns.pairplot(profile.dropna(), hue='gender')
+
+#all_offers = transcript.value.apply(lambda x: x['offer id'] if 'offer id' in x else 0).values
+#all_offers = all_offers[all_offers != 0]
+#portfolio_group = portfolio.groupby('id')[['offer_type', 'channels']]
+
+#all_channels = [portfolio_group.get_group(ide).values[0][1] for ide in all_offers]
+#all_channels = [row for subrow in all_channels for row in subrow]
+
+#all_types = [portfolio_group.get_group(ide).values[0][0] for ide in all_offers]
+#del all_offers, portfolio_group
+
+#plt.rcParams["figure.figsize"] = (10,4)
+
+#fig, (ax1, ax2) = plt.subplots(ncols = 2, sharey = True)
+#sns.countplot(all_channels, ax=ax1)
+#sns.countplot(all_types, ax=ax2)
+
+#del all_types, all_channels
+
+portfolio_channels = portfolio['channels'].apply(lambda x: ' '.join(x)).str.get_dummies(' ')
+portfolio_channels.columns = ['channel_' + col for col in portfolio_channels.columns]
+
+portfolio_offertype = portfolio['offer_type'].str.get_dummies()
+portfolio_offertype.columns = ['offer_' + col for col in portfolio_offertype.columns]
+
+portfolio = pd.concat([portfolio, portfolio_channels, portfolio_offertype], axis=1)
+portfolio = portfolio.drop(['channels', 'offer_type'], axis=1)
+#print(portfolio.head())
+
+del portfolio_channels, portfolio_offertype
+#print(portfolio.isna().sum().sum())
+
+#print('# missing values of income, gender:')
+#print(profile['income'].isna().sum(), profile['gender'].isna().sum())
+
+profile = profile.dropna(axis=0, subset=['gender', 'income'])
+
+profile_gender = profile['gender'].str.get_dummies()
+profile_gender.columns = ['gender_' + col for col in profile_gender.columns]
+
+profile_date = profile['became_member_on']
+
+profile_year = profile_date.apply(lambda d: str(d)).str[0:4].astype('int').rename('member_year')
+profile_month = profile_date.apply(lambda d: str(d)).str[4:6].astype('int').rename('member_month')
+profile_day = profile_date.apply(lambda d: str(d)).str[6:8].astype('int').rename('member_day')
+
+profile = pd.concat([profile, profile_gender, profile_year, profile_month, profile_day], axis=1)
+profile = profile.drop(['became_member_on', 'gender'], axis=1)
+del profile_gender, profile_year, profile_month, profile_day
+#print(profile.head())
+
+transcript_event = transcript['event'].str.get_dummies()
+transcript_event.columns = ['event_' + '_'.join(col.split(' ')) for col in transcript_event.columns]
+
+def transcript_value_clean(x_dict):
+    if 'offer id' in x_dict:
+        x_dict['offer_id'] = x_dict['offer id']
+        del x_dict['offer id']
+    return x_dict
+
+transcript_values = transcript['value'].apply(lambda x: transcript_value_clean(x))
+transcript_values = pd.DataFrame(list(transcript_values.values))
+
+transcript_values['is_reward'] = transcript_values['reward'].apply(lambda x: int(not np.isnan(x)))
+transcript_values['is_amount'] = transcript_values['amount'].apply(lambda x: int(not np.isnan(x)))
+transcript_values['amount'] = transcript_values[['amount', 'reward']].apply(lambda x: x[0] if np.isnan(x[1]) else x[1], axis=1)
+transcript_values['has_offer'] = transcript_values['offer_id'].apply(lambda x: int(not pd.isna(x)))
+transcript_values['offer_id'] = transcript_values['offer_id'].apply(lambda x: '0' if pd.isna(x) else x)
+
+transcript = pd.concat([transcript, transcript_values, transcript_event], axis=1)
+transcript = transcript.drop(['value', 'event', 'reward'], axis=1)
+del transcript_value_clean, transcript_values, transcript_event
+
+#print(transcript.head())
+
+transcript_profile = pd.merge(transcript, profile, left_on='person', right_on='id')
+
+transaction_data_only = transcript_profile[transcript_profile.event_transaction == 1]
+transaction_data_only = transaction_data_only.select_dtypes(exclude=['object'])
+
+transaction_data_f = transaction_data_only[transaction_data_only.gender_F == 1]
+transaction_data_m = transaction_data_only[transaction_data_only.gender_M == 1]
+
+#print(transaction_data_only.head())
+
+#plt.rcParams["figure.figsize"] = (12,4)
+#fig, (ax1, ax2) = plt.subplots(ncols = 2)
+
+#g = sns.boxplot(x="gender_F", y="amount",
+#            hue="gender_F", palette=["m", "g"],
+#            data=transaction_data_only, ax=ax1)
+
+#g.set_yscale('log')
+#g.legend().set_title('Gender')
+#for t, l in zip(g.legend().texts, ['Male', 'Female']): t.set_text(l)
+
+#plt.title('Amount spent on transactions by Gender')
+#plt.xlabel('Gender')
+#plt.ylabel('Amount')
+#plt.xticks([[]])
+
+#h = sns.countplot(transaction_data_only['gender_F'], ax=ax2)
+
+#plt.title('Number of Transactions by Gender')
+#plt.xlabel('Gender')
+#plt.ylabel('Transactions')
+#plt.xticks([0, 1], ['Male', 'Female'])
+
+description_columns = ['amount', 'age', 'income']
+description_labels = [cat + '_' + gen for cat in ['Male', 'Female'] for gen in description_columns]
+reorder_columns = [gen + '_' + cat for cat in description_columns for gen in ['Male', 'Female']]
+
+description = pd.concat([transaction_data_m[['amount', 'age', 'income']].describe(), 
+           transaction_data_f[['amount', 'age', 'income']].describe()], axis=1)
+description.columns = description_labels
+#plt.show()
+
+#print(description[reorder_columns])
+
+transcript_portfolio = pd.merge(transcript, portfolio, left_on='offer_id', right_on='id', how='left')
+transcript_by_group = transcript_portfolio.groupby(['person', 'offer_id'])
+
+#transactions_only = transcript_portfolio.loc[transcript_portfolio['event_transaction'] == 1]
+#transcript_by_group2 = transactions_only.groupby(['person'])
+
+#completion_details = []
+
+#for i, g in transcript_by_group:
+    
+#    record = {}
+    
+#    if g[['event_offer_received', 'event_offer_viewed', 'event_offer_completed']].sum(axis=0).sum() == 3:
+#        record['status'] = 'viewed_and_completed'
+#    elif (g[['event_offer_received', 'event_offer_completed']].sum(axis=0).sum() == 2) and 'status' not in record:
+#        record['status'] = 'not_viewed_and_completed'
+#    else:
+#        record['status'] = 'no_offer'
+    
+#    person_id, offer_id = g['person'].iloc[0], g['offer_id'].iloc[0]
+#    first_purchase, last_purchase = g['time'].min(), g['time'].max()
+    
+#    try:
+#        person_transactions = transcript_by_group2.get_group(person_id)
+#    except KeyError:
+#        offer_transactions = []
+    
+#    offer_transactions = person_transactions[(person_transactions.time > first_purchase) \
+#                                             & (person_transactions.time < last_purchase)]
+
+#    record['num_transactions'] = len(offer_transactions)
+#    record['person_id'], record['offer_id'] = person_id, offer_id
+#    record['first_purchase'], record['last_purchase'] = first_purchase, last_purchase
+    
+#    completion_details.append(record)
+
+#print('Completed forming transactions')
+
+#completion_details_df = pd.DataFrame(completion_details)
+
+#plt.rcParams["figure.figsize"] = (12,4)
+
+#fig, (ax1, ax2) = plt.subplots(ncols = 2)
+
+#g = sns.countplot(completion_details_df['status'], ax=ax1)
+#g.set_xticklabels(labels = ['No Offer', 'Viewed and Completed Offer', 'Did not view but completed offer'], rotation=45)
+
+#h = sns.countplot(completion_details_df[completion_details_df.status != 'no_offer']['num_transactions'], ax=ax2)
+#plt.show()
+
+#for val in np.unique(completion_details_df['status']):
+#    print(val , ' : ' , ((completion_details_df['status'] == val).sum() / len(completion_details_df))*100, '%')
+
+#completed_offers_with_zero_purchases = completion_details_df[(completion_details_df.status != 'no_offer') & (completion_details_df.num_transactions == 0)]
+#completed_offers_with_zero_purchases = pd.merge(completed_offers_with_zero_purchases, portfolio[['id', 'offer_type']], left_on='offer_id', right_on='id')
+#completed_offers_with_zero_purchases.drop(['offer_id', 'person_id', 'id'], axis=1).sample(5)
+
+data_x = transaction_data_only.drop(['amount', 'time'], axis=1)
+data_y = transaction_data_only['amount']
+
+scaler = StandardScaler()
+data_x = scaler.fit_transform(data_x)
+
+#print(data_x.shape, data_y.shape)
+
+X_train, X_test, y_train, y_test = train_test_split(data_x, data_y, test_size=0.33)
+#print(X_train.shape, X_test.shape)
+
+sv_model = SVR(kernel='poly', degree=7)
+sv_model.fit(X_train, y_train)
+print('SVR model trained on 7-degree poly kernel')
+
+y_preds_svr = sv_model.predict(X_test)
+print('SVR Model R2 score: ' , r2_score(y_test, y_preds_svr))
+
+rf_model = RandomForestRegressor(n_estimators=100, max_depth=20, max_features=15, min_samples_split=5)
+rf_model.fit(X_train, y_train)
+print('RF Model trained with 10 estimators')
+
+y_preds_rf = rf_model.predict(X_test)
+print('RF Model R2 score: ' , r2_score(y_test, y_preds_rf))
+
+params = {'n_estimators' : [10, 50, 100], 'max_depth' : [5, 10, 30, 80], \
+          'max_features': [1, 3, 8, 15], 'min_samples_split': [3, 5, 10, 30, 50, 100]}
+
+g_rfm = RandomForestRegressor(random_state=1024)
+g_src = GridSearchCV(g_rfm, params, verbose=10, cv=5, scoring='r2')
+g_src.fit(X_train, y_train)
+print(g_src.best_params_)
+
+tuned_rf_model = RandomForestRegressor(max_depth=30, max_features=3, min_samples_split=100, n_estimators=100)
+tuned_rf_model.fit(X_train, y_train)
+y_preds_tuned = tuned_rf_model.predict(X_test)
+print(r2_score(y_test, y_preds_tuned))
+
+pd.DataFrame(list(zip(transaction_data_only.columns[2:], tuned_rf_model.feature_importances_)), columns=['Attribute', 'Feature Importance']).sort_values(by='Feature Importance', ascending=False)
