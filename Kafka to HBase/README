@@ -1,0 +1,47 @@
+MapR is a platform for streaming, processing and storing large amounts of data (i.e., comparable to Hadoop). MapR Event Store and Apache Kafka are both data streaming 
+technologies. MapR Event Store is integrated into the MapR Data Platform and implements the Apache Kafka Java API so applications written for Kafka can also run on MapR 
+Event Store. We use MapR Streams/Kafka Streams when it comes to enabling communication between producers and consumers using message-based topics. A kafka topic is a 
+collection of messages.
+
+What differentiates the MapR Event Store technology from Kafka are its built-in features for global replication, security, multi-tenancy, high availability, and disaster 
+recovery (i.e., all of which it inherits from the MapR Data Platform). I will not jump into the comparisons between these 2 technologies, as it is not the purpose here.
+
+Ingesting MapR Streams/Kafka data into MapR-DB/HBase is a very common use case when persisting real-time data streams are needed to conduct a particular business activity. 
+Kafka and HBase are built with two very important goals in mind: scalability and performance.
+
+The purpose of this section is to present how to integrate these technologies in a python code using PySpark.
+
+The following preliminary steps were taken in HBase & Kafka prior to writing the pyspark code stored in this folder as well:
+
+i. create HBase table called 'clicks' -- it will be used to persist the real-time streamed data
+
+hbase(main):010:0> create 'clicks','clickinfo','iteminfo'
+
+--Sample Record
+
+hbase(main):012:0>
+put 'clicks','click1','clickinfo:studentid','student1'
+hbase(main):013:0>
+put 'clicks','click1','clickinfo:url','http://www.google.com'
+hbase(main):014:0>
+put 'clicks','click1','clickinfo:time','2014-01-01 12:01:01.0001'
+hbase(main):015:0>
+put 'clicks','click1','iteminfo:itemtype','image'
+hbase(main):016:0>
+put 'clicks','click1','iteminfo:quantity','1'
+
+ii. scan 'clicks' and see the result -- it shows the record created
+iii. create Kafka path & topic
+
+Following the above, the PySpark code was created, with the following logic:
+i. import Python needed modules
+ii. initialize Spark job parameters (i.e., lifespan of the application is 30 seconds, pulling messages every 10 seconds, etc.)
+iii. create SparkContext and StreamingContext
+iv. define a function to be called to run the application main streaming thread
+v. print some application related details
+vi. define the HBase connection details and Kafka connection details
+vii. define a function to be called to save RDDs into HBase
+viii. create Kafka DStream -- using topic created earlier
+ix. filter the stream -- this includes splitting, filtering and mapping tasks
+x. pass each RDD into the function defined earlier
+xi. run the streaming thread
