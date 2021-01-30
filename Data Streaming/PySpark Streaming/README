@@ -1,3 +1,6 @@
+General information about Data Streaming with PySpark:
+-----------------------------------------------------
+
 Quite a lot of streaming data needs to be processed in real-time, such as Google Search results.
 
 Spark Streaming is an extension of the core Spark API that enables scalable and fault-tolerant stream processing of live data streams.
@@ -37,3 +40,21 @@ Broadcast variable in Spark:
 It allows the programmer to keep a read-only variable cached on each machine. Usually, Spark automatically distributes broadcast variables using efficient broadcast algorithms 
 but we can also define them if we have tasks that require the same data for multiple stages (e.g., location data, such as mappings of city names and ZIP codes, which are rather 
 fixed variables that would be too expensive to send to clusters over and over again).
+
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+Twitter Sentiment Analysis Model (cf. twitter-sentiment-analysis.py):
+--------------------------------------------------------------------
+
+The purpose of the model is to detect hate speeches in Tweets. For the sake of simplicity, we say a Tweet contains hate speech if it has a racist or sexist sentiment 
+associated with it.
+
+The dataset used for training contains 130,000 tweets labelled ‘1’ if racist/sexist and ‘0’ otherwise.
+
+Setp-by-step process followed here:
+i. Model Building -- a Logistic Regression Model pipeline to classify whether a tweet contains hate speech or not. My focus is not to build a very accurate classification model,
+but rather to see how to use any model and return results on streaming data
+ii. Initialize Spark Streaming Context -- define hostname and port number from where we get the streaming data
+iii. Stream Data -- add the tweets from the netcat server from the defined port, then the Spark Streaming API receives the data after a specified time window
+iv. Predict and Return Results -- pass the data into the machine learning pipeline and return the predicted sentiment from the model
