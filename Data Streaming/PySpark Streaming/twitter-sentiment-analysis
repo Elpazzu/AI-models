@@ -9,62 +9,51 @@ from pyspark.ml.classification import LogisticRegression
 from pyspark.sql import Row, Column
 import sys
 
-# define the function to get the predicted sentiment on the data received
-def get_prediction(tweet_text):
+def get_prediction(tweet_text): -- function to get the predicted sentiment on data received
 	try:
-                # remove the blank tweets
-		tweet_text = tweet_text.filter(lambda x: len(x) > 0)
-                # create the dataframe with each row contains a tweet text
-		rowRdd = tweet_text.map(lambda w: Row(tweet=w))
-		wordsDataFrame = spark.createDataFrame(rowRdd)
-		# get the sentiments for each row
-		pipelineFit.transform(wordsDataFrame).select('tweet','prediction').show()
+		tweet_text = tweet_text.filter(lambda x: len(x) > 0) -- remove blank tweets
+                rowRdd = tweet_text.map(lambda w: Row(tweet=w)) -- map 1 row to 1 tweet text
+		wordsDataFrame = spark.createDataFrame(rowRdd) -- create dataframe with each row containing 1 tweet text
+		pipelineFit.transform(wordsDataFrame).select('tweet','prediction').show() -- get the sentiments for each row
 	except : 
 		print('No data')
 
-
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
+    if len(sys.argv) != 3: 
         print("Error!! Please define host and port number", file=sys.stderr)
         sys.exit(-1)
     sc = SparkContext(appName="PySparkShell")
     spark = SparkSession(sc)
     
-    # define the schema
-    my_schema = tp.StructType([
-				tp.StructField(name= 'id',          dataType= tp.IntegerType(),  nullable= True),
-    				tp.StructField(name= 'label',       dataType= tp.IntegerType(),  nullable= True),
-    				tp.StructField(name= 'tweet',       dataType= tp.StringType(),   nullable= True)    
-    			      ])
+    # define the schema to tell Spark not to consider the data type of each column as string
+    my_schema = tp.StructType([ tp.StructField(name= 'id', dataType= tp.IntegerType(),  nullable= True),
+    				tp.StructField(name= 'label', dataType= tp.IntegerType(),  nullable= True),
+    				tp.StructField(name= 'tweet', dataType= tp.StringType(),   nullable= True)])
+    
     # reading the data set
     print('\n\nReading the dataset...........................\n')
-    my_data = spark.read.csv('/home/lakshay/Documents/PySpark/spark_streaming/twitter_sentiments.csv', schema=my_schema, header=True)
+    my_data = spark.read.csv('twitter_sentiments.csv', schema=my_schema, header=True)
     my_data.show(2)
 
     my_data.printSchema()
     print('\n\nDefining the pipeline stages.................\n')
-    stage_1 = RegexTokenizer(inputCol= 'tweet' , outputCol= 'tokens', pattern= '\\W')
-
-    stage_2 = StopWordsRemover(inputCol= 'tokens', outputCol= 'filtered_words')
-
-    stage_3 = Word2Vec(inputCol= 'filtered_words', outputCol= 'vector', vectorSize= 100)
-
-    model = LogisticRegression(featuresCol= 'vector', labelCol= 'label') 
+    stage_1 = RegexTokenizer(inputCol= 'tweet' , outputCol= 'tokens', pattern= '\\W') -- convert Tweet text into a list of words using RegexTokenizer
+    stage_2 = StopWordsRemover(inputCol= 'tokens', outputCol= 'filtered_words') -- remove stop words from the word list (e.g., 'a', 'the', 'is', etc.)
+    stage_3 = Word2Vec(inputCol= 'filtered_words', outputCol= 'vector', vectorSize= 100) -- create word vectors
+    model = LogisticRegression(featuresCol= 'vector', labelCol= 'label') -- build logistic regression model using word vectors
     
     print('\n\nStages Defined................................\n')
-    pipeline = Pipeline(stages= [stage_1, stage_2, stage_3, model])
-
+    pipeline = Pipeline(stages= [stage_1, stage_2, stage_3, model]) -- add the stages in Pipeline object to perform these transformations in order
+    
     print('\n\nFit the pipeline with the training data.......\n')
-    pipelineFit = pipeline.fit(my_data)
-
-
+    pipelineFit = pipeline.fit(my_data) -- fit pipeline with the training dataset
 
     print('\n\nModel Trained....Waiting for the Data!!!!!!!!\n')
-    ssc = StreamingContext(sc, batchDuration= 3)
-    lines = ssc.socketTextStream(sys.argv[1], int(sys.argv[2]))
-    words = lines.flatMap(lambda line : line.split('TWEET_APP'))
+    ssc = StreamingContext(sc, batchDuration= 3) -- batch duration is 3 seconds (i.e., we will do predictions on data that we receive every 3 seconds)
+    lines = ssc.socketTextStream(sys.argv[1], int(sys.argv[2])) -- stream of data received from the server (i.e., each record in DStream is a line of text)
+    words = lines.flatMap(lambda line : line.split('TWEET_APP')) -- flatten the RDD
 
-    words.foreachRDD(get_prediction)
+    words.foreachRDD(get_prediction) -- use get_prediction function created above to get results of sentiments predictions
 
-    ssc.start()             # Start the computation
-    ssc.awaitTermination()  # Wait for the computation to terminate
+    ssc.start() -- start computation
+    ssc.awaitTermination() -- wait for computation to terminate
