@@ -10,7 +10,7 @@ data = pd.read_csv('minute_weather.csv')
 #print(data.shape)
 #print(data.head())
 
-sampled_df = data[(data['rowID'] % 10) == 0]
+sampled_df = data[(data['rowID'] % 10) == 0] -- data was sampled by taking every 10th observation in the dataset as it is a large one
 #print(sampled_df.shape)
 #print(sampled_df.describe().transpose())
 #print(sampled_df[sampled_df['rain_accumulation'] == 0].shape)
@@ -20,7 +20,7 @@ del sampled_df['rain_accumulation']
 del sampled_df['rain_duration']
 
 rows_before = sampled_df.shape[0]
-sampled_df = sampled_df.dropna()
+sampled_df = sampled_df.dropna() -- all rows with empty rain_duration and rain_accumulation were dropped (i.e., 46 rows in total)
 rows_after = sampled_df.shape[0]
 #print(sampled_df.columns)
 #print(rows_after - rows_before)
@@ -29,16 +29,16 @@ features = ['air_pressure', 'air_temp', 'avg_wind_direction', 'avg_wind_speed', 
         'max_wind_speed','relative_humidity']
 
 select_df = sampled_df[features]
-X = StandardScaler().fit_transform(select_df)
+X = StandardScaler().fit_transform(select_df) -- used to standardize all features by subtracting the mean and then scaling to unit variance (i.e., dividing all values by std)
 
-kmeans = KMeans(n_clusters=12)
-model = kmeans.fit(X)
+kmeans = KMeans(n_clusters=12) 
+model = kmeans.fit(X) -- fit KMeans model to get 12 clusters from the overall dataset
 #print("model\n", model)
 
-centers = model.cluster_centers_
+centers = model.cluster_centers_ -- check the centers of the 12 clusters formed (i.e., each center consists of 7 coefficients for each of the 7 features selected above)
 #print(centers)
 
-def pd_centers(featuresUsed, centers):
+def pd_centers(featuresUsed, centers): -- function that creates a DataFrame with a column for the Cluster Number
 	colNames = list(featuresUsed)
 	colNames.append('prediction')
 
@@ -48,14 +48,14 @@ def pd_centers(featuresUsed, centers):
 	P['prediction'] = P['prediction'].astype(int)
 	return P
 
-def parallel_plot(data):
+def parallel_plot(data): -- function that creates parallel plots to make compare clusters based on the 7 features selected above
 	my_colors = list(islice(cycle(['b', 'r', 'g', 'y', 'k']), None, len(data)))
 	plt.figure(figsize=(15,8)).gca().axes.set_ylim([-3,+3])
 	parallel_coordinates(data, 'prediction', color = my_colors, marker='o')
     
-P = pd_centers(features, centers)
+P = pd_centers(features, centers) -- creation of a DataFrame containing the centers of all 12 clusters as per the 7 selected features
 #print(P)
 
-parallel_plot(P[P['relative_humidity'] < -0.5])
-parallel_plot(P[P['air_temp'] > 0.5])
-parallel_plot(P[(P['relative_humidity'] > 0.5) & (P['air_temp'] < 0.5)])
+parallel_plot(P[P['relative_humidity'] < -0.5]) -- parallel plot that illustrates the clusters for which the relative_humidity value (scaled) is below -0.5
+parallel_plot(P[P['air_temp'] > 0.5]) -- parallel plot that illustrates the clusters for which the air_temp value (scaled) is above 0.5
+parallel_plot(P[(P['relative_humidity'] > 0.5) & (P['air_temp'] < 0.5)]) -- same logic as above 2 but with 2 conditions
