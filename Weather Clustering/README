@@ -1,0 +1,30 @@
+This is a K-means clustering analysis to generate a big picture model of the weather at a local station using a minute-graunlarity data. 
+
+K-means clustering tries to minimize distances within a cluster and maximize the distance between different clusters. A K-means algorithm is not capable of determining the 
+number of clusters, so we need to define it when creating the KMeans object (it may be a challenging task)
+
+K-Means is an iterative process:
+1. Randomly select centroids (center of cluster) for each cluster
+2. Calculate the distance of all data points to the centroids
+3. Assign data points to the closest cluster
+4. Find the new centroids of each cluster by taking the mean of all data points in the cluster
+5. Repeat steps 2, 3 and 4 until all points converge and cluster centers stop moving
+
+The minute weather dataset used here contains ~1.5 million raw sensor measurements captured at one-minute intervals. The data comes from a weather station located in San Diego, 
+California. That station is equipped with sensors that capture weather-related measurements such as air temperature, air pressure, and relative humidity. 
+
+Data was collected for a period of three years, from September 2011 to September 2014, to ensure that sufficient data for different seasons and weather conditions is captured. 
+Each row in the dataset contains weather data captured for a one-minute interval:
+- rowID = unique number for each row (Unit: NA)
+- hpwren_timestamp = timestamp of measure (Unit: year-month-day hour:minute:second)
+- air_pressure = air pressure measured at the timestamp (Unit: hectopascals)
+- air_temp = air temperature measure at the timestamp (Unit: degrees Fahrenheit)
+- avg_wind_direction = wind direction averaged over the minute before the timestamp (Unit: degrees, with 0 means coming from the North, and increasing clockwise)
+- avg_wind_speed = wind speed averaged over the minute before the timestamp (Unit: meters per second)
+- max_wind_direction = highest wind direction in the minute before the timestamp (Unit: degrees, with 0 being North and increasing clockwise)
+- max_wind_speed = highest wind speed in the minute before the timestamp (Unit: meters per second)
+- min_wind_direction = smallest wind direction in the minute before the timestamp (Unit: degrees, with 0 being North and inceasing clockwise)
+- min_wind_speed = smallest wind speed in the minute before the timestamp (Unit: meters per second)
+- rain_accumulation = amount of accumulated rain measured at the timestamp (Unit: millimeters)
+- rain_duration = length of time rain has fallen as measured at the timestamp (Unit: seconds)
+- relative_humidity = relative humidity measured at the timestamp (Unit: percent)
