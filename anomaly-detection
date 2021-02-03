@@ -1,0 +1,287 @@
+import pandas as pd
+import numpy as np
+from numpy import percentile
+import matplotlib.pyplot as plt
+import seaborn as sns
+import matplotlib
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
+from pyod.models.abod import ABOD
+from pyod.models.cblof import CBLOF
+from pyod.models.hbos import HBOS
+from pyod.models.iforest import IForest
+from pyod.models.knn import KNN
+from pyod.models.lof import LOF
+from scipy import stats
+from sklearn.preprocessing import MinMaxScaler
+
+df = pd.read_csv('Orders.csv', header= 0, encoding='unicode_escape')
+#print(df.head(3))
+#print(df.Sales.describe())
+
+#plt.scatter(range(df.shape[0]), np.sort(df['Sales'].values))
+#plt.xlabel('index')
+#plt.ylabel('Sales')
+#plt.title("Sales distribution")
+#sns.despine()
+
+#sns.distplot(df['Sales'])
+#plt.title("Distribution of Sales")
+#sns.despine()
+
+#print("Skewness: %f" % df['Sales'].skew())
+#print("Kurtosis: %f" % df['Sales'].kurt())
+
+#print(df.Profit.describe())
+
+#plt.scatter(range(df.shape[0]), np.sort(df['Profit'].values))
+#plt.xlabel('index')
+#plt.ylabel('Profit')
+#plt.title("Profit distribution")
+#sns.despine()
+
+#sns.distplot(df['Profit'])
+#plt.title("Distribution of Profit")
+#sns.despine()
+
+#print("Skewness: %f" % df['Profit'].skew())
+#print("Kurtosis: %f" % df['Profit'].kurt())
+
+isolation_forest = IsolationForest(n_estimators=100)
+isolation_forest.fit(df['Sales'].values.reshape(-1, 1))
+xx = np.linspace(df['Sales'].min(), df['Sales'].max(), len(df)).reshape(-1,1)
+anomaly_score = isolation_forest.decision_function(xx)
+outlier = isolation_forest.predict(xx)
+#plt.figure(figsize=(10,4))
+#plt.plot(xx, anomaly_score, label='anomaly score')
+#plt.fill_between(xx.T[0], np.min(anomaly_score), np.max(anomaly_score), 
+#                 where=outlier==-1, color='r', 
+#                 alpha=.4, label='outlier region')
+#plt.legend()
+#plt.ylabel('anomaly score')
+#plt.xlabel('Sales')
+#plt.show()
+
+#print(df.loc[df['Sales'] > 1500].head())
+#print(df.iloc[10])
+
+isolation_forest = IsolationForest(n_estimators=100)
+isolation_forest.fit(df['Profit'].values.reshape(-1, 1))
+xx = np.linspace(df['Profit'].min(), df['Profit'].max(), len(df)).reshape(-1,1)
+anomaly_score = isolation_forest.decision_function(xx)
+outlier = isolation_forest.predict(xx)
+#plt.figure(figsize=(10,4))
+#plt.plot(xx, anomaly_score, label='anomaly score')
+#plt.fill_between(xx.T[0], np.min(anomaly_score), np.max(anomaly_score), 
+#                 where=outlier==-1, color='r', 
+#                 alpha=.4, label='outlier region')
+#plt.legend()
+#plt.ylabel('anomaly score')
+#plt.xlabel('Profit')
+#plt.show()
+
+#print(df.loc[df['Profit'] < -100].head())
+#print(df.iloc[3])
+#print(df.loc[df['Profit'] > 200].head())
+#print(df.iloc[1])
+
+#sns.regplot(x="Sales", y="Profit", data=df)
+#sns.despine()
+
+cols = ['Sales', 'Profit']
+#print(df[cols].head())
+
+minmax = MinMaxScaler(feature_range=(0, 1))
+df[['Sales','Profit']] = minmax.fit_transform(df[['Sales','Profit']])
+#print(df[['Sales','Profit']].head())
+
+X1 = df['Sales'].values.reshape(-1,1)
+X2 = df['Profit'].values.reshape(-1,1)
+X = np.concatenate((X1,X2),axis=1)
+
+outliers_fraction = 0.01
+xx , yy = np.meshgrid(np.linspace(0, 1, 100), np.linspace(0, 1, 100))
+clf = CBLOF(contamination=outliers_fraction,check_estimator=False, random_state=0)
+clf.fit(X)
+
+scores_pred = clf.decision_function(X) * -1
+        
+y_pred = clf.predict(X)
+n_inliers = len(y_pred) - np.count_nonzero(y_pred)
+n_outliers = np.count_nonzero(y_pred == 1)
+
+#plt.figure(figsize=(8, 8))
+
+df1 = df
+df1['outlier'] = y_pred.tolist()
+    
+inliers_sales = np.array(df1['Sales'][df1['outlier'] == 0]).reshape(-1,1)
+inliers_profit = np.array(df1['Profit'][df1['outlier'] == 0]).reshape(-1,1)
+    
+outliers_sales = df1['Sales'][df1['outlier'] == 1].values.reshape(-1,1)
+outliers_profit = df1['Profit'][df1['outlier'] == 1].values.reshape(-1,1)
+         
+#print('OUTLIERS:',n_outliers,'INLIERS:',n_inliers)
+        
+threshold = percentile(scores_pred, 100 * outliers_fraction)
+        
+Z = clf.decision_function(np.c_[xx.ravel(), yy.ravel()]) * -1
+Z = Z.reshape(xx.shape)
+#plt.contourf(xx, yy, Z, levels=np.linspace(Z.min(), threshold, 7),cmap=plt.cm.Blues_r)
+        
+#a = plt.contour(xx, yy, Z, levels=[threshold],linewidths=2, colors='red')
+        
+#plt.contourf(xx, yy, Z, levels=[threshold, Z.max()],colors='orange')
+#b = plt.scatter(inliers_sales, inliers_profit, c='white',s=20, edgecolor='k')
+    
+#c = plt.scatter(outliers_sales, outliers_profit, c='black',s=20, edgecolor='k')
+       
+#plt.axis('tight')   
+#plt.legend([a.collections[0], b,c], ['learned decision function', 'inliers','outliers'],
+#           prop=matplotlib.font_manager.FontProperties(size=20),loc='lower right')
+      
+#plt.xlim((0, 1))
+#plt.ylim((0, 1))
+#plt.title('Cluster-based Local Outlier Factor (CBLOF)')
+#plt.show()
+
+outliers_fraction = 0.01
+xx , yy = np.meshgrid(np.linspace(0, 1, 100), np.linspace(0, 1, 100))
+clf = HBOS(contamination=outliers_fraction)
+clf.fit(X)
+
+scores_pred = clf.decision_function(X) * -1
+        
+y_pred = clf.predict(X)
+n_inliers = len(y_pred) - np.count_nonzero(y_pred)
+n_outliers = np.count_nonzero(y_pred == 1)
+#plt.figure(figsize=(8, 8))
+
+df1 = df
+df1['outlier'] = y_pred.tolist()
+    
+inliers_sales = np.array(df1['Sales'][df1['outlier'] == 0]).reshape(-1,1)
+inliers_profit = np.array(df1['Profit'][df1['outlier'] == 0]).reshape(-1,1)
+    
+outliers_sales = df1['Sales'][df1['outlier'] == 1].values.reshape(-1,1)
+outliers_profit = df1['Profit'][df1['outlier'] == 1].values.reshape(-1,1)
+         
+#print('OUTLIERS:',n_outliers,'INLIERS:',n_inliers)
+        
+threshold = percentile(scores_pred, 100 * outliers_fraction)
+        
+Z = clf.decision_function(np.c_[xx.ravel(), yy.ravel()]) * -1
+Z = Z.reshape(xx.shape)
+#plt.contourf(xx, yy, Z, levels=np.linspace(Z.min(), threshold, 7),cmap=plt.cm.Blues_r)
+        
+#a = plt.contour(xx, yy, Z, levels=[threshold],linewidths=2, colors='red')
+        
+#plt.contourf(xx, yy, Z, levels=[threshold, Z.max()],colors='orange')
+#b = plt.scatter(inliers_sales, inliers_profit, c='white',s=20, edgecolor='k')
+    
+#c = plt.scatter(outliers_sales, outliers_profit, c='black',s=20, edgecolor='k')
+       
+#plt.axis('tight')  
+     
+#plt.legend([a.collections[0], b,c], ['learned decision function', 'inliers','outliers'],
+#           prop=matplotlib.font_manager.FontProperties(size=20),loc='lower right')
+      
+#plt.xlim((0, 1))
+#plt.ylim((0, 1))
+#plt.title('Histogram-base Outlier Detection (HBOS)')
+#plt.show()
+
+outliers_fraction = 0.01
+xx , yy = np.meshgrid(np.linspace(0, 1, 100), np.linspace(0, 1, 100))
+clf = IForest(contamination=outliers_fraction,random_state=0)
+clf.fit(X)
+
+scores_pred = clf.decision_function(X) * -1
+        
+y_pred = clf.predict(X)
+n_inliers = len(y_pred) - np.count_nonzero(y_pred)
+n_outliers = np.count_nonzero(y_pred == 1)
+#plt.figure(figsize=(8, 8))
+
+df1 = df
+df1['outlier'] = y_pred.tolist()
+    
+inliers_sales = np.array(df1['Sales'][df1['outlier'] == 0]).reshape(-1,1)
+inliers_profit = np.array(df1['Profit'][df1['outlier'] == 0]).reshape(-1,1)
+    
+outliers_sales = df1['Sales'][df1['outlier'] == 1].values.reshape(-1,1)
+outliers_profit = df1['Profit'][df1['outlier'] == 1].values.reshape(-1,1)
+         
+#print('OUTLIERS: ',n_outliers,'INLIERS: ',n_inliers)
+        
+threshold = percentile(scores_pred, 100 * outliers_fraction)
+        
+Z = clf.decision_function(np.c_[xx.ravel(), yy.ravel()]) * -1
+Z = Z.reshape(xx.shape)
+#plt.contourf(xx, yy, Z, levels=np.linspace(Z.min(), threshold, 7),cmap=plt.cm.Blues_r)
+        
+#a = plt.contour(xx, yy, Z, levels=[threshold],linewidths=2, colors='red')
+        
+#plt.contourf(xx, yy, Z, levels=[threshold, Z.max()],colors='orange')
+#b = plt.scatter(inliers_sales, inliers_profit, c='white',s=20, edgecolor='k')
+    
+#c = plt.scatter(outliers_sales, outliers_profit, c='black',s=20, edgecolor='k')
+       
+#plt.axis('tight')
+#plt.legend([a.collections[0], b,c], ['learned decision function', 'inliers','outliers'],
+#           prop=matplotlib.font_manager.FontProperties(size=20),loc='lower right')
+      
+#plt.xlim((0, 1))
+#plt.ylim((0, 1))
+#plt.title('Isolation Forest')
+#plt.show()
+
+outliers_fraction = 0.01
+xx , yy = np.meshgrid(np.linspace(0, 1, 100), np.linspace(0, 1, 100))
+clf = KNN(contamination=outliers_fraction)
+clf.fit(X)
+
+scores_pred = clf.decision_function(X) * -1
+        
+y_pred = clf.predict(X)
+n_inliers = len(y_pred) - np.count_nonzero(y_pred)
+n_outliers = np.count_nonzero(y_pred == 1)
+#plt.figure(figsize=(8, 8))
+
+df1 = df
+df1['outlier'] = y_pred.tolist()
+    
+inliers_sales = np.array(df1['Sales'][df1['outlier'] == 0]).reshape(-1,1)
+inliers_profit = np.array(df1['Profit'][df1['outlier'] == 0]).reshape(-1,1)
+    
+outliers_sales = df1['Sales'][df1['outlier'] == 1].values.reshape(-1,1)
+outliers_profit = df1['Profit'][df1['outlier'] == 1].values.reshape(-1,1)
+         
+#print('OUTLIERS: ',n_outliers,'INLIERS: ',n_inliers)
+        
+threshold = percentile(scores_pred, 100 * outliers_fraction)
+        
+Z = clf.decision_function(np.c_[xx.ravel(), yy.ravel()]) * -1
+Z = Z.reshape(xx.shape)
+#plt.contourf(xx, yy, Z, levels=np.linspace(Z.min(), threshold, 7),cmap=plt.cm.Blues_r)
+        
+#a = plt.contour(xx, yy, Z, levels=[threshold],linewidths=2, colors='red')
+        
+#plt.contourf(xx, yy, Z, levels=[threshold, Z.max()],colors='orange')
+#b = plt.scatter(inliers_sales, inliers_profit, c='white',s=20, edgecolor='k')
+    
+#c = plt.scatter(outliers_sales, outliers_profit, c='black',s=20, edgecolor='k')
+       
+#plt.axis('tight')  
+   
+#plt.legend([a.collections[0], b,c], ['learned decision function', 'inliers','outliers'],
+#           prop=matplotlib.font_manager.FontProperties(size=20),loc='lower right')
+      
+#plt.xlim((0, 1))
+#plt.ylim((0, 1))
+#plt.title('K Nearest Neighbors (KNN)')
+#plt.show()
+
+#print(df1.loc[df1['outlier'] == 1].tail(10))
+#print(df.iloc[1995])
+#print(df.iloc[9649])
