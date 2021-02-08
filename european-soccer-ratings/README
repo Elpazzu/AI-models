@@ -1,0 +1,20 @@
+This exercise was made in response to the following Kaggle post: https://www.kaggle.com/hugomathien/soccer 
+
+Soccer database used for the exercise contains:
+* +25,000 matches
+* +10,000 players
+* 11 European Countries with their lead championship
+* Seasons 2008 to 2016
+* Players and Teams' attributes* sourced from EA Sports' FIFA video game series, including the weekly updates
+* Team line up with squad formation (X, Y coordinates)
+* Betting odds from up to 10 providers
+* Detailed match events (goal types, possession, corner, cross, fouls, cards etc.) for +10,000 matches
+
+The purpose of the models built was to predict the overall ratings of soccer players. We use regression techniques as ratings are continuous variables.
+
+Results of the implementations:
+Linear Regression: RMSE = ~2.82
+Decision Trees Regression: RMSE = ~1.45
+
+As the RMSE is the square root of the variance of the residuals, lower values of RMSE indicate better fit. 
+That means that the DTRegressor performed better in this case.
