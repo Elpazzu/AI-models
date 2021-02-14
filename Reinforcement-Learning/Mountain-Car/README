@@ -1,0 +1,66 @@
+RL - Model-Free - Q-Learning - Quantile Regression + Deep Q-Learning (QR-DQN)
+
+In reinforcement learning, the value of an action a in state s describes the expected return, or discounted sum of rewards, obtained from beginning in that state, choosing 
+action a, and subsequently following a prescribed policy. Knowing the value for the optimal policy is sufficient to act optimally, it is hence the object modelled by classic 
+value-based methods such as SARSA or Q-Learning, which use Bellman’s equation, to calculate that value -- Bellman's equation is associated with dynamic programming, it writes 
+the value of a decision problem at a certain point in time in terms of the payoff from some initial choices and the value of the remaining decision problem that results from 
+those initial choices.
+
+In reinforcement learning, an agent interacts with the environment by taking actions and observing the next state and reward. When sampled probabilistically, these state 
+transitions, rewards, and actions can all induce randomness in the observed long-term return. Traditionally, reinforcement learning algorithms average over this randomness to 
+estimate the value function.
+
+In 2017, it was shown that the distribution of the random returns, whose expectation constitutes that value, can be described by the distributional analogue of Bellman’s 
+equation, that is, the distribution of Bellman's operator (i.e., operator which describes the expected behaviour of popular learning algorithms such as SARSA and Q-Learning).
+
+The distributional Bellman operator is an extreme (maximal) form of the Wasserstein metric (i.e., metric on probability distributions that measures the minimal effort required 
+to reconfigure the probability mass of one distribution in order to recover another distribution) between probability distributions -- the issue is that the Wasserstein metric, 
+viewed as a loss function, cannot generally be minimized using stochastic gradient methods.
+
+This leaves a theory-practice gap in our understanding of distributional reinforcement learning, which makes it difficult to explain the good performance of a model. Hence, the
+objective of this section is to describe a distributional algorithm that operates end-to-end on the Wasserstein metric, that was built in response to this issue -- i.e., this 
+algorithm, applicable in a stochastic approximation setting, can perform distributional reinforcement learning over the Wasserstein metric.
+
+The particularity of this model is that distribution over returns is modeled explicitly instead of only by estimating the mean -- i.e., we examine here methods of learning the 
+value distribution instead of the value function, like done in section xx of this website.
+
+Without going into too many details, the data scientist who worked on this algorithm followed the below approach:
+i. extend an existing classic model that uses heuristic approximation, to use instead distributional approximation 
+ii. show in this new distributional reinforcement learning algorithm that quantile regression may be used to stochastically adjust the distributions’ locations so as to minimize 
+the Wasserstein distance to a target distribution.
+iii. evaluate this new algorithm on other games (i.e., Atari 2600 games), observing that it significantly outperforms the previous algos (i.e., gained 33% median score increment)
+
+Important points to keep in mind:
+i. in distributional RL, the distribution over returns plays the central role and replaces the value function 
+ii. the value distribution is not designed to capture the uncertainty in the estimate of the value function, but rather the randomness in the returns intrinsic to the 
+Markov-Decision-Process
+iii. the value distribution is computed through dynamic programming using a distributional Bellman operator
+iv. the Wasserstein metric is a true probability metric and considers both the probability of and the distance between various outcome events. These properties make the 
+Wasserstein well-suited to domains where an underlying similarity in outcome is more important than exactly matching likelihoods.
+v. the key factor that allowed the minimization of Wasserstein metric using stochastic gradient was to consider fixed probabilities but variable locations when parametrizing 
+the calculation function
+vi. this new approximation aims to estimate quantiles of the target distribution, which is why it is called a quantile distribution -- a quantile distribution maps each 
+state-action pair to a uniform probability distribution
+vi. quantile regression approximates the quantile functions of distributions. Its loss function penalizes over-estimation errors with a specified weight 't', and 
+underestimation errors with weight '1−t. For a distribution and a given quantile 't', the value of the quantile function = minimizer of the quantile regression loss
+vii. By Lemma 2 we can find the minimizing values of errors by stochastic gradient descent
+viii. this model approximates the value distribution with a parameterized quantile distribution over the set of quantile midpoints, defined by Lemma 2, then, trains the 
+location parameters using quantile regression
+ix. the algorithm here is built on the DQN architecture, but it requires three modifications to DQN: it changes the size of the NN output layer to |A| × N, where N is a 
+hyper-parameter giving the number of quantile targets; it uses DQN4 for the loss; it is configured using Adam
+
+Compared to the original parametrization, the benefits of a parameterized quantile distribution are:
+i. we are not restricted to prespecified bounds on the support, or a uniform resolution, potentially leading to significantly more accurate predictions when the range of 
+returns vary greatly across states
+ii. it eliminates issues of disjoint supports (i.e., support of a probability distribution = closure of the set of possible values of a random variable having that 
+distribution), as by using this approach, we no longer need to have the domain knowledge about the bounds of the return distribution when applying the algorithm to new tasks.
+More specifically, QR-DQN does not require projection onto the approximating distribution’s support as it is able to expand or contract the values arbitrarily to cover the 
+true range of return values, which means that QR-DQN does not require the additional hyper-parameter giving the bounds of the support. The only additional hyper-parameter of 
+QR-DQN is the number of quantiles N, which controls with what resolution we approximate the value distribution -- As we increase N, QR-DQN goes from DQN to increasingly able 
+to estimate the upper and lower quantiles of the value distribution. It becomes increasingly capable of distinguishing low probability events at either end of the cumulative 
+distribution over returns.
+iii. is allows us to minimize the Wasserstein loss, without suffering from biased gradients
+
+To conclude, learning the distribution over returns has distinct advantages over learning the value function alone. Distributional reinforcement learning learn the true 
+distribution over returns, show increased robustness during training, and significantly improve sample complexity and final performance over baseline algorithms.
+
