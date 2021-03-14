@@ -1,0 +1,100 @@
+import numpy as np
+import pandas as pd
+import re
+from __future__ import unicode_literals, print_function
+import plac 
+import random
+from pathlib import Path
+import spacy
+from tqdm import tqdm
+
+nlp = spacy.load("en_core_web_sm")
+
+df = pd.read_csv('hardwareswap_data.csv')
+df.drop('Unnamed: 0', axis=1, inplace=True)
+#print(df.head())
+
+buying = df[df['direction'] == 'SELLING']
+text = buying['text'].to_list()
+print(data_set[0])
+
+new_ds = []
+for line in data_set:
+    line = str(line)
+    line = line.replace('\n', ' ')
+    line = line.replace('\n\n', ' ')
+    line = line.replace('\n\n\n', ' ')
+    line = line.replace('&', ' ')
+    line = line.replace('#', '')
+    line = line.replace('x200B', ' ')
+    line = line.replace('[', ' ')
+    line = line.replace(']', ' ')
+    line = line.replace('(', ' ')
+    line = line.replace(')', ' ')
+    line = line.replace('|',' ')
+    line = line.replace(':-', '')
+    line = line.replace('~', '')
+    line = line.replace('~~', '')
+    line = line.replace('-', ' ')
+    line = line.replace('\\', '')
+    line = line.replace('*', '')
+    new_ds.append(line)
+    
+x = ''
+for i in data_set[0]:
+    i = str(i)
+    x += i
+    
+[(m.start(0), m.end(0)) for m in re.finditer(product, x)]
+
+TRAIN_DATA = [
+    (x, {
+        'entities': [(23, 29, 'PRODUCT'), (62, 68, 'PRODUCT'), (309, 315, 'PRODUCT'), (411, 426, 'CONDITION'), (509, 524, 'CONDITION'), (1031, 1067, 'URL'),
+                    (1086, 1109, 'LOCATION'), (1072, 1084, 'LOCALPRICE')]
+    })
+     (x, {
+         'entities': [(411, 426, 'CONDITION'), (509, 524, 'CONDITION')]
+     }),
+     (x, {
+         'entities': [(1031, 1067, 'URL')]
+     })]
+
+model = None
+output_dir=Path("model1")
+n_iter=100
+
+if model is not None:
+    nlp1 = spacy.load(model)
+    print("Loaded model '%s'" % model)
+else:
+    nlp1 = spacy.blank('en')
+    print("Created blank 'en' model")
+    
+if 'ner' not in nlp1.pipe_names:
+    ner = nlp1.create_pipe('ner')
+    nlp1.add_pipe(ner, last=True)
+else:
+    ner = nlp1.get_pipe('ner')
+
+for _, annotations in TRAIN_DATA:
+    for ent in annotations.get('entities'):
+        ner.add_label(ent[2])
+
+other_pipes = [pipe for pipe in nlp1.pipe_names if pipe != 'ner']
+with nlp1.disable_pipes(*other_pipes):
+    optimizer = nlp1.begin_training()
+    for itn in range(n_iter):
+        random.shuffle(TRAIN_DATA)
+        losses = {}
+        for text, annotations in tqdm(TRAIN_DATA):
+            nlp1.update(
+                [text],
+                [annotations],
+                drop=0.5,
+                sgd=optimizer,
+                losses=losses)
+        print(losses)
+
+for text, _ in TRAIN_DATA:
+    doc = nlp1(x)
+    print('Entities', [(ent.text, ent.label_) for ent in doc.ents])
