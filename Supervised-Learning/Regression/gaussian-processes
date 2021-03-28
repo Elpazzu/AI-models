@@ -203,3 +203,79 @@ best_period = solution.x[0]
 
 mu, cov, lnlike = gaussian_process_regression(t, f, ferr, t, cos, period=best_period)
 print("Maximum-likelihood period: {0:.2f} days".format(best_period))
+
+def sine_model(p):
+    amplitude, period = p
+    return amplitude * np.sin(2*np.pi*t / period)
+
+def chi2(p):
+    return np.sum((sine_model(p) - f)**2 / ferr**2)
+
+init_parameters = [1.1, 3.2] 
+bounds = [[0.5, 2], [1, 10]]
+
+solution = minimize(chi2, init_parameters, method='L-BFGS-B', bounds=bounds)
+best_amp, best_period = solution.x
+
+print("Maximum-likelihood period: {0:.2f} days".format(best_period))
+
+plt.errorbar(t, f, ferr, color='k', fmt='.')
+plt.plot(t, sine_model(solution.x))
+plt.xlabel('Time [days]')
+plt.ylabel('Flux')
+
+plt.errorbar(t, f - sine_model([1, true_period]), ferr, color='k', fmt='.')
+plt.xlabel('Time [days]')
+plt.ylabel('Residuals')
+
+def sine_model_gp(p):
+    amplitude, period, ell = p
+    return amplitude * np.sin(2*np.pi*t / period)
+
+def gp_model(p):
+    amplitude, period, ell = p
+    mean_model = sine_model_gp(p)
+    
+    mu, cov, lnlike = gaussian_process_regression(t, f - mean_model, ferr, t, 
+                                                  sq_exp_kernel, ell=ell)
+    residuals = f - mean_model - mu
+    return mu, cov, lnlike, residuals
+
+def chi2(p):
+    mu, cov, lnlike, residuals = gp_model(p)
+    return -2 * lnlike
+ 
+init_parameters = [1.1, 3.5, 2]
+bounds = [[0.5, 2], [3, 10], [2, 10]]
+
+solution = minimize(chi2, init_parameters, method='L-BFGS-B', bounds=bounds)
+best_amp, best_period, best_ell = solution.x
+
+print("Maximum-likelihood period: {0:.2f} days".format(best_period))
+print("Maximum-likelihood ell: {0:.2f} days".format(best_ell))
+
+mu, cov, lnlike, residuals = gp_model(solution.x)
+sigma = np.sqrt(np.diag(cov))
+
+fig, ax = plt.subplots(3, 1, figsize=(6, 10), sharex=True)
+ax[0].errorbar(t, f, ferr, color='k', fmt='.')
+ax[0].plot(t, sine_model_gp(solution.x), label='mean model solution')
+ax[0].plot(t, sine_model_gp(solution.x) + mu, color='C1', label='GP mean')
+ax[0].fill_between(t.ravel(), sine_model_gp(solution.x).ravel() + mu.ravel() - sigma.ravel(), 
+                   sine_model_gp(solution.x).ravel() + mu.ravel() + sigma.ravel(), 
+                   color='C1', label='GP uncertainty', alpha=0.3)
+ax[0].set(ylabel='Flux')
+ax[0].legend()
+
+ax[1].errorbar(t, f - sine_model_gp(solution.x), ferr, color='k', fmt='.')
+ax[1].plot(t, mu, color='C1', label='GP mean')
+ax[1].fill_between(t.ravel(), mu.ravel() - sigma.ravel(), 
+                   mu.ravel() + sigma.ravel(), 
+                   color='C1', label='GP uncertainty', alpha=0.3)
+ax[1].set(ylabel='Flux - mean model')
+ax[1].legend()
+
+ax[2].errorbar(t, residuals, ferr, color='k', fmt='.')
+ax[2].set(xlabel='Time [days]', ylabel='Flux - mean model - GP')
+fig.tight_layout()
+plt.show()
