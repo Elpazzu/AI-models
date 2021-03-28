@@ -1,0 +1,205 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.optimize import minimize
+from ipywidgets import interactive
+
+np.random.seed(42)
+ndim = 10
+
+y = np.random.rand(ndim)[:, None]
+y -= y.mean()
+x = np.arange(len(y))[:, None]
+yerr = (y.std() + 0.1*np.random.randn(len(x))) / 2
+
+plt.figure(figsize=(8, 6))
+plt.errorbar(x, y, yerr, fmt='.', color='k')
+plt.xlabel('x')
+plt.ylabel('y')
+
+X = np.vander(x.ravel(), 2)
+inv_N = np.linalg.inv(np.identity(len(x)) * yerr**2)
+
+betas = np.linalg.inv(X.T @ inv_N @ X) @ X.T @ inv_N @ y
+cov = np.linalg.inv(X.T @ inv_N @ X)
+
+best_fit = X @ betas 
+err = np.sqrt(np.diag(cov))
+
+plt.figure(figsize=(8, 6))
+plt.errorbar(x, y, yerr, fmt='.', color='k')
+plt.plot(x, best_fit)
+plt.fill_between(x.ravel(), best_fit.ravel()-err[1], best_fit.ravel()+err[1], 
+                 alpha=0.3)
+plt.xlabel('x')
+plt.ylabel('y')
+
+def square_distance(x1, x2): 
+    return np.sum(x1**2, axis=1)[:, None] + np.sum(x2**2, axis=1) - 2 * x1 @ x2.T
+            
+def sq_exp_kernel(x1, x2, ell=1): 
+    sqdist = square_distance(x1, x2)
+    return np.exp(-0.5 * sqdist / ell**2)
+
+def gaussian_process_regression(x, y, yerr, xtest, kernel, **kwargs): 
+    K = kernel(x, x, **kwargs) + yerr**2 * np.identity(len(x)) 
+    K_s = kernel(x, xtest, **kwargs)
+    K_ss = kernel(xtest, xtest, **kwargs)
+    
+    inv_K = np.linalg.inv(K)
+    
+    mu = K_s.T @ inv_K @ y
+    cov = K_ss - K_s.T @ inv_K @ K_s
+
+    lnlike = -0.5 * y.T @ inv_K @ y - 0.5 * np.log(np.linalg.det(K)) - len(x)/2 * np.log(2*np.pi)
+    return mu, cov, lnlike.ravel()
+
+N = 100 
+xtest = np.linspace(x.min(), x.max(), N)[:, None]
+
+def gp_interact(error_scale):
+    mu, cov, lnlike = gaussian_process_regression(x, y, yerr*error_scale, xtest, sq_exp_kernel)
+
+    err = np.sqrt(np.diagonal(cov))
+
+    plt.figure(figsize=(8, 6))
+    plt.errorbar(x, y, yerr*error_scale, fmt='.', color='k')
+    plt.plot(xtest.ravel(), mu.ravel(), label='GP mean')
+    plt.fill_between(xtest.ravel(), mu.ravel()-err, mu.ravel()+err, 
+                     alpha=0.3, label='GP uncertainty')
+    plt.legend(loc='upper center')
+    plt.xlabel('x')
+    plt.ylabel('y')
+    
+interactive_plot = interactive(gp_interact, error_scale=(0.1, 1, 0.1))
+output = interactive_plot.children[-1]
+interactive_plot
+
+def gp_interact(ell):
+    def sq_exp_kernel_interactive(x1, x2=None, ell=ell): 
+        if x2 is not None: 
+            sqdist = square_distance(x1, x2)
+        else: 
+            sqdist = x1**2
+            
+        return np.exp(-0.5 * sqdist / ell**2)
+    
+    mu, cov, lnlike = gaussian_process_regression(x, y, yerr, xtest, sq_exp_kernel_interactive)
+    err = np.sqrt(np.diag(cov))
+    
+    fig, ax = plt.subplots(1, 3, figsize=(14, 4))
+    ax[0].errorbar(x, y, yerr, fmt='.', color='k')
+    ax[0].plot(xtest.ravel(), mu.ravel(), label='GP Mean')
+    ax[0].fill_between(xtest.ravel(),  mu.ravel()-err, mu.ravel()+err, 
+                       alpha=0.2, label='GP Uncertainty')
+    ax[0].set(xlabel='$x$', ylabel='$y$', title='GP Regression')
+    ax[0].legend(loc='upper center')
+    
+    ax[1].set(xlabel='$x_1$', ylabel='$x_2$', title='Covariance matrix')
+    ax[1].imshow(sq_exp_kernel_interactive(x, x))
+    
+    ax[2].plot(xtest, sq_exp_kernel_interactive(xtest))
+    ax[2].set(xlabel='Lags', ylabel='Covariance', title='Autocorrelation Function')
+    fig.tight_layout()
+    plt.show()
+    
+def gp_interact(ell, period):
+    def exp_cos(x1, x2=None, sigma=1, ell=ell, period=period): 
+        if x2 is not None:
+            sqdist = square_distance(x1, x2)
+        else: 
+            sqdist = x1**2
+            
+        return np.exp(-0.5 * sqdist / ell**2) * np.cos(2*np.pi*np.sqrt(sqdist) / period)
+    
+    mu, cov, lnlike = gaussian_process_regression(x, y, yerr, xtest, exp_cos)
+    err = np.sqrt(np.diag(cov))
+    
+    fig, ax = plt.subplots(1, 3, figsize=(14, 4))
+    ax[0].errorbar(x, y, yerr, fmt='.', color='k')
+    ax[0].plot(xtest.ravel(), mu.ravel(), label='GP Mean')
+    ax[0].fill_between(xtest.ravel(),  mu.ravel()-err, mu.ravel()+err, 
+                       alpha=0.2, label='GP Uncertainty')
+    ax[0].set(xlabel='$x$', ylabel='$y$', title='GP Regression')
+    ax[0].legend(loc='upper center')
+    
+    ax[1].set(xlabel='$x_1$', ylabel='$x_2$', title='Covariance matrix')
+    ax[1].imshow(exp_cos(x, x))
+    
+    ax[2].plot(xtest, exp_cos(xtest))
+    ax[2].set(xlabel='Lags', ylabel='Covariance', 
+              title='Autocorrelation Function')
+    fig.tight_layout()
+    plt.show()
+
+interactive_plot = interactive(gp_interact, ell=(1, 10, 1), period=(1, 10, 1))
+output = interactive_plot.children[-1]
+interactive_plot
+
+interactive_plot = interactive(gp_interact, ell=(1, 10, 1))
+output = interactive_plot.children[-1]
+interactive_plot
+
+true_period = 3.5 # days
+
+np.random.seed(42)
+npoints = 50
+t = np.linspace(0, 2*true_period, npoints)[:, None]
+
+sinusoid = np.sin(2*np.pi*t/true_period) 
+
+ferr = 0.2 + 0.05 * np.random.randn(len(t))
+
+cov = np.diag((2*ferr)**2) + 0.5 * np.exp(-0.5 * square_distance(t, t) / 2)
+f = np.random.multivariate_normal(sinusoid.ravel(), cov)[:, None]
+
+t_test = np.linspace(t.min(), t.max() + 5, 100)[:, None]
+
+plt.errorbar(t, f, ferr, color='k', fmt='.')
+plt.xlabel('Time [days]')
+plt.ylabel('Flux')
+
+def cos(x1, x2=None, sigma=1, period=None): 
+    if x2 is not None:
+        sqdist = square_distance(x1, x2)
+    else: 
+        sqdist = x1**2
+
+    return np.cos(2*np.pi*np.sqrt(sqdist) / period)
+
+def gp_interact(period):
+    mu, cov, lnlike = gaussian_process_regression(t, f, ferr, t, cos, period=period)    
+    mu, cov, _ = gaussian_process_regression(t, f, ferr, t_test, cos, period=period)
+    err = np.sqrt(np.diag(cov))
+    
+    fig, ax = plt.subplots(1, 3, figsize=(14, 4))
+    ax[0].errorbar(t, f, ferr, fmt='.', color='k')
+    ax[0].plot(t_test.ravel(), mu.ravel(), label='GP Mean')
+    ax[0].fill_between(t_test.ravel(),  mu.ravel()-err, mu.ravel()+err, alpha=0.2, label='GP Uncertainty')
+    ax[0].set(xlabel='Time [days]', ylabel='Flux', title='GP Regression')
+    ax[0].legend(loc='upper center')
+    
+    ax[1].set(xlabel='$x_1$', ylabel='$x_2$', title='Covariance matrix')
+    ax[1].imshow(cos(t, t, period=period))
+    
+    ax[2].plot(xtest, cos(xtest, period=period))
+    ax[2].set(xlabel='Lags', ylabel='Covariance', title='Autocorrelation Function')
+    fig.tight_layout()
+    plt.show()
+
+interactive_plot = interactive(gp_interact, ell=(1, 10, 1), period=(1, 10, 0.5))
+output = interactive_plot.children[-1]
+interactive_plot
+
+def chi2(p):
+    period = p
+    mu, cov, lnlike = gaussian_process_regression(t, f, ferr, t, cos, period=period)
+    return -2 * lnlike
+
+init_parameters = [3.] 
+bounds = [[2, 10]]
+
+solution = minimize(chi2, init_parameters, method='L-BFGS-B', bounds=bounds)
+best_period = solution.x[0]
+
+mu, cov, lnlike = gaussian_process_regression(t, f, ferr, t, cos, period=best_period)
+print("Maximum-likelihood period: {0:.2f} days".format(best_period))
