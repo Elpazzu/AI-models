@@ -1,0 +1,117 @@
+import gym
+from gym.wrappers import Monitor
+import tensorflow as tf
+import tensorflow_probability as tfp
+import numpy as np
+import glob
+import io
+import base64
+from IPython.display import HTML
+from IPython import display as ipythondisplay
+from pyvirtualdisplay import Display
+
+display = Display(visible=0, size=(1400, 900))
+display.start()
+
+def show_video():
+  mp4list = glob.glob('video/*.mp4')
+  if len(mp4list) > 0:
+    mp4 = mp4list[0]
+    video = io.open(mp4, 'r+b').read()
+    encoded = base64.b64encode(video)
+    ipythondisplay.display(HTML(data='''<video alt="test" autoplay 
+                loop controls style="height: 400px;">
+                <source src="data:video/mp4;base64,{0}" type="video/mp4" />
+             </video>'''.format(encoded.decode('ascii'))))
+  else: 
+    print("Video not found")
+    
+def wrap_env(env):
+  env = Monitor(env, './video', force=True)
+  return env
+
+env = wrap_env(gym.make('Acrobot-v1'))
+num_features = env.observation_space.shape[0]
+num_actions = env.action_space.n
+print('Number of state features: {}'.format(num_features))
+print('Number of possible actions: {}'.format(num_actions))
+
+class Network(tf.keras.Model):
+  def __init__(self):
+    super(Network, self).__init__()
+    self.dense1 = tf.keras.layers.Dense(32, activation='relu')
+    self.out = tf.keras.layers.Dense(num_actions)
+    self.dist = tfp.distributions.Categorical
+  
+  def call(self, x):
+    x = self.dense1(x)
+    logits = self.out(x)
+    action = self.dist(logits=logits).sample()
+    probs = tf.nn.softmax(logits, axis=-1)
+    log_probs = tf.nn.log_softmax(logits, axis=-1)
+    return logits, action, probs, log_probs
+
+net = Network()
+optimizer = tf.keras.optimizers.Adam(learning_rate=2e-2)
+
+def train_step(batch_states, batch_actions, batch_returns):
+    with tf.GradientTape() as tape:
+        logits, actions, probs, log_probs = net(batch_states)
+        action_masks = tf.one_hot(batch_actions, num_actions)
+        masked_log_probs = tf.reduce_sum(action_masks * log_probs, axis=-1)
+        loss = -tf.reduce_mean(batch_returns * masked_log_probs)
+    net_gradients = tape.gradient(loss, net.trainable_variables)
+    optimizer.apply_gradients(zip(net_gradients, net.trainable_variables))
+    return loss
+
+num_episodes = 1000
+viz_update_freq = 50
+steps_per_train_step = 5000
+
+last_100_ep_ret, text = [], ''
+batch_states, batch_actions, batch_returns = [], [], []
+for episode in range(num_episodes):
+    if episode % viz_update_freq == 0:
+        env.close()
+        env = wrap_env(gym.make('Acrobot-v1'))
+  
+    state = env.reset()
+    done, ep_rew = False, []
+    while not done:
+        state_in = np.expand_dims(state, 0)
+        logits, action, probs, log_probs = net(state_in)
+        next_state, reward, done, info = env.step(action[0].numpy())
+        batch_states.append(state)
+        batch_actions.append(action[0])
+        ep_rew.append(reward)
+        state = next_state
+    
+    episode_ret = sum(ep_rew)
+    episode_len = len(ep_rew)
+    batch_returns += [episode_ret] * episode_len
+  
+    if len(batch_states) >= steps_per_train_step:
+        loss = train_step(np.array(batch_states), np.array(batch_actions),
+                      np.array(batch_returns, dtype=np.float32))
+        ipythondisplay.clear_output()
+        text += f"Episode: {episode}, Loss: {loss:.2f}, "\
+            f"Return: {np.mean(batch_returns):.2f}\n"
+        print(text)
+        print('Current agent performance:')
+        show_video()
+        batch_states, batch_actions, batch_returns = [], [], []
+
+env = wrap_env(gym.make('Acrobot-v1'))
+state = env.reset()
+ret = 0
+while True:
+    env.render()
+    state = tf.expand_dims(state, axis=0)
+    logits, action, probs, log_probs = net(state)
+    state, reward, done, info = env.step(action[0].numpy())
+    ret += reward
+    if done:
+        break
+env.close()
+print('Return on this episode: {}'.format(ret))
+show_video()
