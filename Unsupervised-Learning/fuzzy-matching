@@ -1,0 +1,149 @@
+import pandas as pd
+from matplotlib import style
+import numpy as np
+import os
+import re
+import time
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.neighbors import NearestNeighbors
+from sklearn.metrics.pairwise import cosine_similarity
+from tqdm import tqdm
+from google.colab import drive
+from ftfy import fix_text
+from scipy.sparse import csr_matrix
+import sparse_dot_topn.sparse_dot_topn as ct
+from fuzzywuzzy import fuzz
+from fuzzywuzzy import process
+
+pd.set_option('display.max_colwidth', -1)
+style.use('fivethirtyeight')
+
+names =  pd.read_csv('messy org names.csv',encoding='latin')
+print('The shape: %d x %d' % names.shape)
+print('There are %d unique values' % names.buyer.shape[0])
+
+def ngrams(string, n=3):
+    string = str(string)
+    string = fix_text(string)
+    string = string.encode("ascii", errors="ignore").decode()
+    string = string.lower()
+    chars_to_remove = [")","(",".","|","[","]","{","}","'"]
+    rx = '[' + re.escape(''.join(chars_to_remove)) + ']'
+    string = re.sub(rx, '', string)
+    string = string.replace('&', 'and')
+    string = string.replace(',', ' ')
+    string = string.replace('-', ' ')
+    string = string.title()
+    string = re.sub(' +',' ',string).strip()
+    string = ' '+ string +' '
+    string = re.sub(r'[,-./]|\sBD',r'', string)
+    ngrams = zip(*[string[i:] for i in range(n)])
+    return [''.join(ngram) for ngram in ngrams]
+
+print('All 3-grams in "Department":')
+print(ngrams('Department'))
+
+def awesome_cossim_top(A, B, ntop, lower_bound=0):
+    A = A.tocsr()
+    B = B.tocsr()
+    M, _ = A.shape
+    _, N = B.shape
+ 
+    idx_dtype = np.int32
+    nnz_max = M*ntop
+ 
+    indptr = np.zeros(M+1, dtype=idx_dtype)
+    indices = np.zeros(nnz_max, dtype=idx_dtype)
+    data = np.zeros(nnz_max, dtype=A.dtype)
+
+    ct.sparse_dot_topn(
+        M, N, np.asarray(A.indptr, dtype=idx_dtype),
+        np.asarray(A.indices, dtype=idx_dtype),
+        A.data,
+        np.asarray(B.indptr, dtype=idx_dtype),
+        np.asarray(B.indices, dtype=idx_dtype),
+        B.data,
+        ntop,
+        lower_bound,
+        indptr, indices, data)
+
+    return csr_matrix((data,indices,indptr),shape=(M,N))
+
+org_names = names['buyer'].unique()
+vectorizer = TfidfVectorizer(min_df=1, analyzer=ngrams)
+tf_idf_matrix = vectorizer.fit_transform(org_names)
+
+t1 = time.time()
+matches = awesome_cossim_top(tf_idf_matrix, tf_idf_matrix.transpose(), 10, 0.85)
+t = time.time()-t1
+print("SELFTIMED:", t)
+
+t1 = time.time()
+print(process.extractOne('Ministry of Justice', org_names))
+t = time.time()-t1
+print("SELFTIMED:", t)
+print("Estimated hours to complete for full dataset:", (t*len(org_names))/60/60)
+
+def get_matches_df(sparse_matrix, name_vector, top=100):
+    non_zeros = sparse_matrix.nonzero()
+    sparserows = non_zeros[0]
+    sparsecols = non_zeros[1]
+    
+    if top:
+        nr_matches = top
+    else:
+        nr_matches = sparsecols.size
+    
+    left_side = np.empty([nr_matches], dtype=object)
+    right_side = np.empty([nr_matches], dtype=object)
+    similairity = np.zeros(nr_matches)
+    
+    for index in range(0, nr_matches):
+        left_side[index] = name_vector[sparserows[index]]
+        right_side[index] = name_vector[sparsecols[index]]
+        similairity[index] = sparse_matrix.data[index]
+    
+    return pd.DataFrame({'left_side': left_side,'right_side': right_side,'similairity': similairity})
+
+matches_df = get_matches_df(matches, org_names, top=1000)
+matches_df = matches_df[matches_df['similairity'] < 0.99999]
+print(matches_df.sample(5))
+print(matches_df.sort_values(['similairity'], ascending=False).head(5))
+
+clean_org_names = pd.read_excel('Gov Orgs ONS.xlsx')
+clean_org_names = clean_org_names.iloc[:, 0:6]
+org_name_clean = clean_org_names['Institutions'].unique()
+
+print('Vecorizing the data - this could take a few minutes for large datasets...')
+vectorizer = TfidfVectorizer(min_df=1, analyzer=ngrams, lowercase=False)
+tfidf = vectorizer.fit_transform(org_name_clean)
+print('Vecorizing completed...')
+
+nbrs = NearestNeighbors(n_neighbors=1, n_jobs=-1).fit(tfidf)
+
+org_column = 'buyer'
+unique_org = set(names[org_column].values)
+
+def getNearestN(query):
+    queryTFIDF_ = vectorizer.transform(query)
+    distances, indices = nbrs.kneighbors(queryTFIDF_)
+    return distances, indices
+
+t1 = time.time()
+print('getting nearest n...')
+distances, indices = getNearestN(unique_org)
+t = time.time()-t1
+print("COMPLETED IN:", t)
+
+unique_org = list(unique_org)
+print('finding matches...')
+matches = []
+for i,j in enumerate(indices):
+  temp = [round(distances[i][0],2), clean_org_names.values[j][0][0],unique_org[i]]
+  matches.append(temp)
+
+print('Building data frame...')  
+matches = pd.DataFrame(matches, columns=['Match confidence (lower is better)','Matched name','Origional name'])
+print('Done')
+
+print(matches.head(10))
