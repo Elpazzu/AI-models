@@ -1,0 +1,174 @@
+import requests
+from bs4 import BeautifulSoup
+import time
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.preprocessing import scale
+import prince
+
+url = requests.get('https://en.wikipedia.org/wiki/World_Happiness_Report').text
+time.sleep(1)
+#print(f"Response file type: {type(url)}")
+#print(f"The length of the response file is: {len(url)}")
+#print(f"Below are the first few lines of the response file: \n {url[:300]}")
+
+content = BeautifulSoup(url,features="html.parser")
+#print(content.text[7336:8000])
+
+My_table = content.find('table',{'class':'wikitable sortable'})
+My_table2 = My_table.select('tr')
+#print(f"My_table is a: {type(My_table)}")
+#print(f"My_table2 is a: {type(My_table2)}")
+#print(f"The length of My_table2 is: {len(My_table2)}")
+
+#print(f"The first element in My_table2 contains:\n {My_table2[0]}")
+#print(f"The second element of My_table2 contains:\n {My_table2[1]}") 
+#print(f"The last element of My_table2 contains:\n {My_table2[153]}")
+
+column_names = []
+for td in My_table2[0].select("th"):
+    column_names.append(td.text.replace('\n', ' ').strip())
+#print(column_names)
+
+tabcol1 = []
+tabcol2 = []
+tabcol3 = []
+tabcol4 = []
+tabcol5 = []
+tabcol6 = []
+tabcol7 = []
+tabcol8 = []
+tabcol9 = []
+
+for tr in My_table2:
+    dat = tr.select('td')
+    if len(dat)==9:
+        tabcol1.append(dat[0].find(text=True))
+        tabcol2.append(dat[1].text.strip())
+        tabcol3.append(dat[2].find(text=True))
+        tabcol4.append(dat[3].find(text=True))
+        tabcol5.append(dat[4].find(text=True))
+        tabcol6.append(dat[5].find(text=True))
+        tabcol7.append(dat[6].find(text=True))
+        tabcol8.append(dat[7].find(text=True))
+        tabcol9.append(dat[8].find(text=True))
+        
+df = pd.DataFrame(tabcol1,columns=[column_names[0]])
+df[column_names[1]] = tabcol2
+df[column_names[2]] = tabcol3
+df[column_names[3]] = tabcol4
+df[column_names[4]] = tabcol5
+df[column_names[5]] = tabcol6
+df[column_names[6]] = tabcol7
+df[column_names[7]] = tabcol8
+df[column_names[8]] = tabcol9
+
+#print(f"The table contains: {df.shape[0]} rows and {df.shape[1]} columns")
+#print(df.head())
+#print(df.info())    
+
+df.columns = df.columns.str.strip().str.lower().str.replace(' ', '_').str.replace('(', '').str.replace(')', '')
+numerical_features = ['gdp_per_capita', 'social_support', 'healthy_life_expectancy',
+       'freedom_to_make_life_choices', 'generosity',  'perceptions_of_corruption']
+
+df[numerical_features] = df[numerical_features].astype('float')
+df['overall_rank'] = df['overall_rank'].astype('int')
+df['country_or_region'] = df['country_or_region'].astype('category')
+#print(df.dtypes)
+
+df.to_csv('world_happiness_data19.csv', index=False)
+df2 = pd.melt(df, id_vars='country_or_region', value_vars=df[numerical_features])
+#plt.figure(figsize=(8,6))
+#sns.set(style="whitegrid")
+#sns.boxplot(y='variable',x='value', data=df2, palette="Set2")
+#plt.show()
+
+#print("Top 10 countries: \n {}".format((df[['overall_rank','country_or_region']][df['overall_rank']<=10]).to_string(index = False)))
+
+df3 = pd.qcut(df['overall_rank'], 5,  labels=["Very Top Rank", "Top Rank", "Middle Rank", "Low Rank","Very Low Rank"])
+df4 = pd.concat([df, df3], axis=1)
+df4.columns=['overall_rank', 'country_or_region', 'score','gdp_per_capita', 'social_support', 'healthy_life_expectancy', 'freedom_to_make_life_choices', 'generosity',  'perceptions_of_corruption', 'group']      
+#print(pd.value_counts(df4['group']))
+
+for g in df4['group'].unique():
+    tt = df4[['group','country_or_region']][df4['group']==g]
+#    print(f"List of Countries at {g}:  \n {list(tt['country_or_region'])}")
+
+df = df.drop(['overall_rank','score'], axis=1)
+
+numerical_features = ['gdp_per_capita', 'social_support', 'healthy_life_expectancy',
+                      'freedom_to_make_life_choices', 'generosity', 'perceptions_of_corruption']
+
+#print(df[numerical_features].describe().round(2))
+
+df_scaled = scale(df[numerical_features])
+df2 = pd.DataFrame(df_scaled, columns=numerical_features)
+df2['country_or_region'] = pd.Series(df['country_or_region'], index=df.index)
+df3 = pd.melt(df2, id_vars='country_or_region', value_vars=df2[numerical_features])
+#plt.figure(figsize=(8,6))
+#sns.set(style="whitegrid")
+#sns.boxplot(y='variable',x='value', data=df3, palette="Set2")
+#plt.show()
+
+#sns.set(style="whitegrid")
+#sns.pairplot(df2[numerical_features], kind='reg', diag_kind='kde')
+#plt.show()
+
+#plt.figure(figsize=(8,6))
+#sns.set(style="whitegrid")
+#sns.heatmap(df2[numerical_features].corr(method='pearson'), vmin=-.1, vmax=1,  annot=True, cmap='RdYlGn')
+#plt.show()
+
+pca = prince.PCA(
+     n_components=6,
+     n_iter=10,
+     rescale_with_mean=False,
+     rescale_with_std=False,
+     copy=True,
+     check_input=True,
+     engine='sklearn',
+     random_state=234)
+pca = pca.fit(df2[numerical_features]) 
+#print(pca.eigenvalues_)
+
+dset = pd.DataFrame()
+dset['pca'] = range(1,7)
+dset['eigenvalue'] = pd.DataFrame(pca.eigenvalues_)
+plt.figure(figsize=(8,6))
+sns.lineplot(x='pca', y='eigenvalue', marker="o", data=dset)
+plt.ylabel('Eigenvalue', fontsize=16)
+plt.xlabel('Principal Component', fontsize=16)
+plt.show()
+
+dset = pd.DataFrame()
+dset['pca'] = range(1,7)
+dset['vari'] = pd.DataFrame(pca.explained_inertia_)
+
+plt.figure(figsize=(8,6))
+graph = sns.barplot(x='pca', y='vari', data=dset)
+for p in graph.patches:
+    graph.annotate('{:.2f}'.format(p.get_height()), (p.get_x()+0.2, p.get_height()),
+                   ha='center', va='bottom',
+                   color= 'black')
+plt.ylabel('Proportion', fontsize=18)
+plt.xlabel('Principal Component', fontsize=18)
+plt.show()
+
+print(pca.column_correlations(df2[numerical_features]))
+
+scatter = pd.DataFrame(pca.column_correlations(df2[numerical_features])).reset_index()
+plt.figure(figsize=(10,6))
+ax = sns.scatterplot(x=0, y=1, data=scatter)
+ax.set(ylim=(-1, 1), xlim=(-1,0))
+def label_point(x, y, val, ax):
+    a = pd.concat({'x': x, 'y': y, 'val': val}, axis=1)
+    for i, point in a.iterrows():
+        ax.text(point['x']+.02, point['y'], str(point['val']))
+label_point(scatter[0], scatter[1], scatter['index'], plt.gca())  
+plt.axvline(-0.5, ls='--')
+plt.axhline(0, ls='--')
+plt.title('Pattern Plot of Component 2 by Component 1', fontsize=18)
+plt.xlabel('Component 1 (50%)', fontsize=18)
+plt.ylabel('Component 2 (24%)', fontsize=18)
+plt.show()
