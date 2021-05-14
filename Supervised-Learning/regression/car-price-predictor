@@ -1,0 +1,142 @@
+import pandas as pd
+import numpy as np
+from matplotlib import pyplot as plt
+from pandas.plotting import scatter_matrix
+from sklearn.preprocessing import StandardScaler, LabelBinarizer
+from sklearn.model_selection import cross_val_score
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.svm import SVR
+from sklearn.naive_bayes import GaussianNB
+import statsmodels.formula.api as smf
+
+car = pd.read_csv("DatasetADs.csv")
+
+print(car.describe())
+print(car.head())
+print(car.columns)
+print(car.isnull().sum())
+
+cat_classes = car.select_dtypes(include=object).columns
+num_classes = car.select_dtypes(include=np.int64).columns
+print(len(cat_classes))
+print(cat_classes)
+print(num_classes)
+print(car.select_dtypes(include=object).head())
+
+print(car['City'].value_counts().shape)
+car['City'].value_counts()
+cars = car.drop("City", axis=1)
+
+print(car['serie'].value_counts().shape)
+car['serie'].value_counts()
+
+print(car['Make'].value_counts().shape)
+car['Make'].value_counts()
+
+print(car['Date_ads'].value_counts().shape)
+car['Date_ads'].value_counts()
+cars = cars.drop("Date_ads", axis=1)
+
+print(car['Fuel'].value_counts().shape)
+car['Fuel'].value_counts()
+
+print(car['Country_Make'].value_counts().shape)
+car['Country_Make'].value_counts()
+
+car.hist(bins=50, figsize=(20,15))
+plt.show()
+
+car['price'].hist(bins=500, figsize=(10,5))
+plt.xlim(0, 350000)
+plt.show()
+
+print(max(car['price']))
+
+plt.plot(car['Age'].value_counts(ascending=True), car['Year'].value_counts(ascending=True))
+plt.plot()
+
+attributes = ['Mileage_Min', 'Mileage_Max', 'Year', 'min_prix_neuf','max_prix_neuf', 'Age']
+scatter_matrix(car[attributes], figsize=(12, 8))
+plt.show()
+
+cars = cars.drop("Year", axis=1)
+cars["avg_prix"] = (cars['min_prix_neuf']+cars["max_prix_neuf"])/2
+cars = cars.drop("max_prix_neuf", axis=1)
+cars = cars.drop("min_prix_neuf", axis=1)
+cars["avg_mileage"] = (cars['Mileage_Min']+cars["Mileage_Max"])/2
+cars = cars.drop("Mileage_Min", axis=1)
+cars = cars.drop("Mileage_Max", axis=1)
+print(cars.describe())
+
+corr_matrix = cars.corr()
+print(corr_matrix["price"].sort_values(ascending=False))
+
+attributes = ['Age', 'avg_prix', 'avg_mileage']
+scatter_matrix(cars[attributes], figsize=(12, 8))
+plt.show()
+
+cars_featurs = cars.drop("price", axis=1)
+cars_labels = cars["price"]
+
+cars_labels =  pd.DataFrame(cars_labels, columns=['price'])
+print(cars_labels.head())
+
+cars_cat = cars_featurs.drop(['Age', 'avg_prix', 'avg_mileage'], axis=1)
+cars_num = cars_featurs.drop(['serie' ,'Make', 'Fuel', 'Country_Make'], axis=1)
+
+scaler = StandardScaler()
+cars_scaled = scaler.fit_transform(cars_num)
+cars_scale = pd.DataFrame(cars_scaled, columns=cars_num.columns)
+print(cars_scale.head())
+
+cat_classes = ['serie' ,'Make', 'Fuel', 'Country_Make']
+encoder = LabelBinarizer()
+cars_cat_1hot = encoder.fit_transform(cars_cat["Fuel"])
+
+p1, p2 = np.percentile(car['price'], [.1, 95])
+car['price'].quantile([0.5, 0.95])
+cars_labels["price"].where(cars_labels["price"] > p2).describe()
+
+def display_scores(scores):
+    print("Scores:", scores)
+    print("Mean:", scores.mean())
+    print("Standard deviation:", scores.std())
+
+lin_reg = LinearRegression()
+scores = cross_val_score(lin_reg, cars_scale, cars_labels,
+scoring="neg_mean_squared_error", cv=10)
+rmse_scores = np.sqrt(-scores)
+
+print(display_scores(rmse_scores))
+
+forest_reg = RandomForestRegressor(bootstrap=True, criterion='mse', max_depth=None,
+                      max_features=2, max_leaf_nodes=None,
+                      min_impurity_decrease=0.0, min_impurity_split=None,
+                      min_samples_leaf=1, min_samples_split=2,
+                      min_weight_fraction_leaf=0.0, n_estimators=30,
+                      n_jobs=None, oob_score=False, random_state=None,
+                      verbose=0, warm_start=False)
+
+scores = cross_val_score(forest_reg, cars_scale, cars_labels.values.ravel(), scoring="neg_mean_squared_error", cv=10)
+rdf_scores = np.sqrt(-scores)
+
+print(display_scores(rdf_scores))
+
+svm_reg = SVR(gamma='auto', kernel='rbf')
+scores = cross_val_score(svm_reg, cars_scale, cars_labels.values.ravel(),scoring="neg_mean_squared_error", cv=10)
+rmse_scores = np.sqrt(-scores)
+print(display_scores(rmse_scores))
+
+nb_reg = GaussianNB()
+scores = cross_val_score(nb_reg, cars_scale, cars_labels.values.ravel(),scoring="neg_mean_squared_error", cv=10)
+rmse_scores = np.sqrt(-scores)
+print(display_scores(rmse_scores))
+
+def resiprocal(y, x, a, b):
+    s = (y - (a*np.exp(b*x)))**2
+
+df = car
+dfs = df.filter(['Make', 'serie', 'Age', 'Mileage_Min', 'Mileage_Max', 'Fuel', "price"], axis=1)
+results = smf.ols('np.log(price) ~ Make + Fuel + np.log(Mileage_Max) + np.log(Age) ', data= dfs).fit()
+print(results.summary())
