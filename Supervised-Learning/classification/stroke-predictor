@@ -1,0 +1,30 @@
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
+from sklearn.neighbors import KNeighborsClassifier
+
+df = pd.read_csv('healthcare-dataset-stroke-data.csv')
+#print(df.head())
+#print(df.shape)
+
+X = df.drop(columns=['stroke'])
+y = df['stroke'].values
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.2, random_state=1, stratify=y)
+
+knn = KNeighborsClassifier(n_neighbors = 3)
+knn.fit(X_train,y_train)
+knn.predict(X_test)
+#print(knn.score(X_test, y_test))
+
+knn_cv = KNeighborsClassifier(n_neighbors=3)
+cv_scores = cross_val_score(knn_cv, X, y, cv=5)
+#print(cv_scores)
+#print('cv_scores mean:{}'.format(np.mean(cv_scores)))
+
+knn2 = KNeighborsClassifier()
+param_grid = {'n_neighbors': np.arange(1, 25)}
+knn_gscv = GridSearchCV(knn2, param_grid, cv=5)
+knn_gscv.fit(X, y)
+#print(knn_gscv.best_params_)
+#print(knn_gscv.best_score_)
