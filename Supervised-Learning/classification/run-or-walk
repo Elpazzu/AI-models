@@ -1,0 +1,58 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import time
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import SGDClassifier
+from sklearn.metrics import accuracy_score
+from sklearn.svm import SVC
+
+run_walk = pd.read_csv('run_or_walk.csv')
+#print(run_walk.head())
+
+x = run_walk.drop(['date', 'time', 'username', 'activity'], axis=1)
+y = run_walk['activity']
+
+trainX, testX, trainY, testY = train_test_split(x, y, test_size = 0.2)
+
+scaler = StandardScaler()
+scaler.fit(trainX)
+trainX = scaler.transform(trainX)
+testX = scaler.transform(testX)
+
+clf = SGDClassifier(loss="log", penalty="l2")
+clf.fit(trainX, trainY)
+y_pred = clf.predict(testX)
+#print('Accuracy: {:.2f}'.format(accuracy_score(testY, y_pred)))
+
+clf = SGDClassifier(loss="hinge", penalty="l2")
+clf.fit(trainX, trainY)
+y_pred = clf.predict(testX)
+#print('Accuracy: {:.2f}'.format(accuracy_score(testY, y_pred)))
+
+start = time.time()
+clf = SGDClassifier(loss="hinge", penalty="l2")
+clf.fit(trainX, trainY)
+stop = time.time()
+#print(f"Training time for linear SVM with SGD training: {stop - start}s")
+
+start = time.time()
+clf = SVC(kernel='linear')
+clf.fit(trainX, trainY)
+stop = time.time()
+#print(f"Training time for linear SVM without SGD training: {stop - start}s")
+
+params = {
+    "loss" : ["hinge", "log", "squared_hinge", "modified_huber", "perceptron"],
+    "alpha" : [0.0001, 0.001, 0.01, 0.1],
+    "penalty" : ["l2", "l1", "elasticnet", "none"],
+}
+
+clf = SGDClassifier(max_iter=1000)
+grid = GridSearchCV(clf, param_grid=params, cv=10)
+grid.fit(trainX, trainY)
+#print(grid.best_params_)
+
+grid_predictions = grid.predict(testX)
+#print('Accuracy: {:.2f}'.format(accuracy_score(testY, grid_predictions)))
