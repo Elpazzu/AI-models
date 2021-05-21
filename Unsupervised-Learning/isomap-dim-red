@@ -1,0 +1,43 @@
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.ticker import NullFormatter
+from sklearn.manifold import Isomap
+from sklearn import datasets
+from sklearn.decomposition import PCA
+Axes3D
+
+n_points = 1000
+
+X, color = datasets.samples_generator.make_s_curve(n_points, random_state=0)
+n_neighbors = 10
+n_components = 2
+
+X, color = datasets.samples_generator.make_s_curve(n_points, random_state=0)
+n_neighbors = 10
+n_components = 2
+
+fig = plt.figure(figsize=(15, 8))
+plt.suptitle("S shape dataset" % (1000, n_neighbors), fontsize=14)
+ax = fig.add_subplot(111, projection='3d')
+ax.scatter(X[:, 0], X[:, 1], X[:, 2], c=color, cmap=plt.cm.Spectral)
+ax.view_init(4, -72)
+
+Y = PCA(n_components).fit_transform(X)
+
+ax = fig.add_subplot(111)
+plt.scatter(Y[:, 0], Y[:, 1], c=color, cmap=plt.cm.Spectral)
+plt.title("PCA on S curve")
+ax.xaxis.set_major_formatter(NullFormatter())
+ax.yaxis.set_major_formatter(NullFormatter())
+plt.axis('tight')
+plt.show()
+
+Y = Isomap(n_neighbors, n_components).fit_transform(X)
+
+ax = fig.add_subplot(111)
+plt.scatter(Y[:, 0], Y[:, 1], c=color, cmap=plt.cm.Spectral)
+plt.title("Isomap on S curve")
+ax.xaxis.set_major_formatter(NullFormatter())
+ax.yaxis.set_major_formatter(NullFormatter())
+plt.axis('tight')
+plt.show()
