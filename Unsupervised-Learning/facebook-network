@@ -40,8 +40,8 @@ for n in G.nodes():
 density = nx.density(G)
 print("Network density:", density)
 
-friendship_path = nx.shortest_path(G, source="Noemie Honein", target="Scott Chen")
-print("Shortest path between Noemie and Scott:", friendship_path)
+friendship_path = nx.shortest_path(G, source="xxxx xxxx", target="xxxx xxxx")
+print("Shortest path between xxxx and xxxx:", friendship_path)
 print("Length of that path:", len(friendship_path)-1)
 
 print(nx.is_connected(G))
@@ -56,7 +56,7 @@ print("Triadic closure:", triadic_closure)
 
 degree_dict = dict(G.degree(G.nodes()))
 nx.set_node_attributes(G, degree_dict, 'degree')
-print(G.nodes['Kamil Baaklini'])
+print(G.nodes['xxxx xxxx'])
 
 sorted_degree = sorted(degree_dict.items(), key=itemgetter(1), reverse=True)
 print("Top 20 nodes by degree:")
